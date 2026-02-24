@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/FoodFast.Core/FoodFast.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/FoodFast.Tests/FoodFast.Tests.csproj" />
+  </Folder>
+</Solution>
