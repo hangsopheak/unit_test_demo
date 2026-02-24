@@ -2,7 +2,7 @@
 
 **Course:** Software Testing
 
-Welcome to the hands-on lab for Software Testing. In this session, we are bridging the gap between business requirements and executable code. You will act as a Quality Assurance Engineer evaluating the `DeliveryPricingEngine` for a food delivery platform.
+Welcome to hands-on lab for Software Testing. In this session, we are bridging gap between business requirements and executable code. You will act as a Quality Assurance Engineer evaluating the `DeliveryPricingEngine` for a food delivery platform.
 
 ## 🏗️ Project Scaffolding
 
@@ -16,16 +16,19 @@ cd FoodFastLab
 # 2. Create the blank Solution file
 dotnet new sln -n FoodFast
 
-# 3. Create the Core (Logic) and Tests projects
+# 3. Create the Core (Logic), Console, and Tests projects
 # Note: Ensure you have the .NET 10 SDK installed
 dotnet new classlib -o src/FoodFast.Core -f net10.0
+dotnet new console -o src/FoodFast.ConsoleApp -f net10.0
 dotnet new xunit -o tests/FoodFast.Tests -f net10.0
 
-# 4. Add both projects to the Solution
+# 4. Add all projects to the Solution
 dotnet sln add src/FoodFast.Core/FoodFast.Core.csproj
+dotnet sln add src/FoodFast.ConsoleApp/FoodFast.ConsoleApp.csproj
 dotnet sln add tests/FoodFast.Tests/FoodFast.Tests.csproj
 
-# 5. Link the Test project to the Core project
+# 5. Link the Console and Test projects to the Core project
+dotnet add src/FoodFast.ConsoleApp/FoodFast.ConsoleApp.csproj reference src/FoodFast.Core/FoodFast.Core.csproj
 dotnet add tests/FoodFast.Tests/FoodFast.Tests.csproj reference src/FoodFast.Core/FoodFast.Core.csproj
 ```
 
@@ -45,9 +48,35 @@ Or build individual projects:
 # Build the Core project
 dotnet build src/FoodFast.Core/FoodFast.Core.csproj
 
+# Build the Console project
+dotnet build src/FoodFast.ConsoleApp/FoodFast.ConsoleApp.csproj
+
 # Build the Tests project
 dotnet build tests/FoodFast.Tests/FoodFast.Tests.csproj
 ```
+
+### Run the Console Application
+
+To run the FoodFast console application and interactively test the pricing engine:
+
+```bash
+dotnet run --project src/FoodFast.ConsoleApp/FoodFast.ConsoleApp.csproj
+```
+
+The interactive console app will prompt you to:
+
+- Enter cart subtotal (in dollars)
+- Enter delivery distance (in kilometers)
+- Specify if it's rush hour (y/n)
+
+After entering your values, the app will display:
+
+- Order details (cart subtotal, distance, rush hour status)
+- Calculated delivery fee
+
+You can continue calculating more orders or exit at any time.
+
+**Try testing the boundary bug**: Enter exactly `50.00` as the cart subtotal to see the intentional bug (should be free but will charge a fee).
 
 ### Run Tests
 
@@ -84,3 +113,8 @@ To restore all NuGet packages:
 ```bash
 dotnet restore FoodFast.slnx
 ```
+
+## 📚 Documentation
+
+- **[Business Specification](docs/BUSINESS_SPECIFICATION.md)** - Detailed business rules and example scenarios
+- **[Test Case Brainstorming](docs/TEST_CASE_BRAINSTORMING.md)** - Comprehensive test case planning by testing technique
