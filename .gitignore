@@ -268,3 +268,7 @@ FodyWeavers.xsd
 
 # Windows shortcuts
 *.lnk
+
+# Custom project folders
+lectures/
+.kilocode/
