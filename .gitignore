@@ -272,3 +272,5 @@ FodyWeavers.xsd
 # Custom project folders
 lectures/
 .kilocode/
+.claude/
+CLAUDE.md
