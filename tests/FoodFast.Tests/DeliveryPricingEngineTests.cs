@@ -81,6 +81,7 @@ public class DeliveryPricingEngineTests
     [Theory]
     [InlineData(3.0, 2.00)]   // Short distance - expect $2.00
     [InlineData(7.5, 5.00)]   // Medium distance - expect $5.00
+    [InlineData(8, 5.00)]
     [InlineData(15.0, 10.00)] // Long distance - expect $10.00
     public void CalculateFee_EquivalencePartitioning_DistanceBuckets_ReturnsCorrectBaseFee(
         double distanceInKm, decimal expectedFee)

@@ -11,7 +11,9 @@
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
     <PackageReference Include="FsCheck" Version="2.16.6" />
     <PackageReference Include="FsCheck.Xunit" Version="2.16.6" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.3" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="WireMock.Net" Version="1.25.0" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="Moq" Version="4.20.72" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
@@ -23,6 +25,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\FoodFast.Core\FoodFast.Core.csproj" />
+    <ProjectReference Include="..\..\src\FoodFast.Api\FoodFast.Api.csproj" />
   </ItemGroup>
 
 </Project>

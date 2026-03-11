@@ -111,7 +111,7 @@ public class DeliveryPricingEngine
     private decimal ApplyFreeDeliveryOverride(decimal calculatedFee, decimal cartSubtotal)
     {
 
-        return cartSubtotal > FreeDeliveryThreshold
+        return cartSubtotal >= FreeDeliveryThreshold
             ? 0.00m
             : calculatedFee;
     }
