@@ -25,123 +25,282 @@ This document defines the integration testing strategy for the FoodFast API. It 
 
 ## Part 1: Postman Collection — API Contract Tests
 
-### Test Architecture
+### Collection Architecture
+
+The collection is organized by **endpoint**, with **Happy Path** and **Sad Path** subfolders under each. Each test case (TC-xx) is a folder that may contain multiple chained requests.
 
 ```
-Collection Run (sequential)
+FoodFast API Contract Tests
 │
-├── Request 1: POST /api/orders         → Seeds data, extracts {{orderId}}
-├── Request 2: GET /api/orders/{{orderId}} → Verifies persistence
-├── Request 3: POST /api/orders/{{orderId}}/calculate-fee → Verifies business logic
-├── Request 4: GET /api/orders           → Verifies list endpoint
-├── Request 5: DELETE /api/orders/{{orderId}} → Verifies deletion
-└── Request 6: GET /api/orders/{{orderId}} → Verifies 404 after delete
+├── POST /api/orders
+│   ├── Happy Path
+│   │   ├── TC-01: Standard order (6km, non-rush → $5)        [1 request]
+│   │   ├── TC-02: Rush hour order (3km, rush → $3)            [1 request]
+│   │   └── TC-03: Free delivery order ($60 cart → $0)         [1 request]
+│   └── Sad Path
+│       ├── TC-04: Negative cart subtotal → 400                [1 request]
+│       ├── TC-05: Distance exceeds 100km → 400                [1 request]
+│       ├── TC-06: Negative distance → 400                     [1 request]
+│       ├── TC-07: Zero distance → 400                         [1 request]
+│       └── TC-08: Multiple validation errors → 400            [1 request]
+│
+├── GET /api/orders/{id}
+│   ├── Happy Path
+│   │   ├── TC-09: Get standard order → 200                    [1 request]
+│   │   ├── TC-10: Get rush hour order → 200                   [1 request]
+│   │   └── TC-11: Get free delivery order → 200               [1 request]
+│   └── Sad Path
+│       └── TC-12: Non-existent order → 404                    [1 request]
+│
+├── GET /api/orders
+│   └── Happy Path
+│       └── TC-13: List all orders → 200 array, sorted         [1 request]
+│
+├── POST /api/orders/{id}/calculate-fee
+│   ├── Happy Path
+│   │   ├── TC-14: Standard fee = $5, total = $35              [1 request]
+│   │   ├── TC-15: Rush fee = $3, total = $23                  [1 request]
+│   │   └── TC-16: Free delivery fee = $0, total = $60         [1 request]
+│   └── Sad Path
+│       └── TC-17: Non-existent order → 404                    [1 request]
+│
+└── DELETE /api/orders/{id}
+    ├── Happy Path
+    │   └── TC-18: Create → Delete → Verify 404                [3 chained requests]
+    └── Sad Path
+        └── TC-19: Delete non-existent → 404                   [1 request]
 ```
 
-### Request 1: Create Order
+### Environment Variables
 
-**Endpoint:** `POST {{baseUrl}}/api/orders`
-
-**Body:**
-```json
-{
-  "cartSubtotal": 30.00,
-  "distanceInKm": 6.0,
-  "isRushHour": false
-}
-```
-
-**Test Assertions:**
-
-| # | Assertion | What it verifies |
+| Variable | Set by | Used by |
 |---|---|---|
-| 1 | Status code is 201 | HTTP contract — resource was created |
-| 2 | Location header matches `/api/orders/\d+` | REST convention — client can follow the link |
-| 3 | Body has `id` (number), `cartSubtotal` (number), `distanceInKm` (number), `isRushHour` (boolean), `deliveryFee` (number), `createdAt` (string) | JSON schema contract |
-| 4 | `deliveryFee >= 0` | Business rule: fee never negative |
-| 5 | Extract `orderId` to environment | Data chaining for subsequent requests |
-
-**Boundary tested:** JSON deserialization → DB insert → DB read → JSON serialization → HTTP 201 + Location header
+| `{{baseUrl}}` | Environment file (pre-configured) | All requests |
+| `{{standardOrderId}}` | TC-01: Create Standard Order | TC-09, TC-14 |
+| `{{rushOrderId}}` | TC-02: Create Rush Hour Order | TC-10, TC-15 |
+| `{{freeDeliveryOrderId}}` | TC-03: Create Free Delivery | TC-11, TC-16 |
+| `{{deleteTargetId}}` | TC-18 Step 1: Create temp order | TC-18 Steps 2–3 |
 
 ---
 
-### Request 2: Get Order by ID
+### POST /api/orders — Happy Path
 
-**Endpoint:** `GET {{baseUrl}}/api/orders/{{orderId}}`
+#### TC-01: Create standard order (6km, non-rush → $5 fee)
 
-**Test Assertions:**
+**Request:** `POST {{baseUrl}}/api/orders`
+**Body:** `{ "cartSubtotal": 30.00, "distanceInKm": 6.0, "isRushHour": false }`
+
+| # | Assertion | What it verifies |
+|---|---|---|
+| 1 | Status code is 201 | HTTP contract — resource created |
+| 2 | Location header matches `/api/orders/\d+` | REST convention |
+| 3 | Body has `id`, `cartSubtotal`, `distanceInKm`, `isRushHour`, `deliveryFee`, `createdAt` | Schema contract |
+| 4 | `deliveryFee == 5` | Medium distance tier = $5 |
+| 5 | Extract `standardOrderId` | Data chaining |
+
+#### TC-02: Create rush hour order (3km, rush → $3 fee)
+
+**Request:** `POST {{baseUrl}}/api/orders`
+**Body:** `{ "cartSubtotal": 20.00, "distanceInKm": 3.0, "isRushHour": true }`
+
+| # | Assertion | What it verifies |
+|---|---|---|
+| 1 | Status code is 201 | HTTP contract |
+| 2 | `deliveryFee == 3` | Short tier $2 × 1.5 rush = $3 |
+| 3 | Extract `rushOrderId` | Data chaining |
+
+#### TC-03: Create free delivery order ($60 cart → $0 fee)
+
+**Request:** `POST {{baseUrl}}/api/orders`
+**Body:** `{ "cartSubtotal": 60.00, "distanceInKm": 8.0, "isRushHour": true }`
+
+| # | Assertion | What it verifies |
+|---|---|---|
+| 1 | Status code is 201 | HTTP contract |
+| 2 | `deliveryFee == 0` | Free delivery: cart >= $50 |
+| 3 | Extract `freeDeliveryOrderId` | Data chaining |
+
+---
+
+### POST /api/orders — Sad Path
+
+#### TC-04: Negative cart subtotal → 400
+
+**Body:** `{ "cartSubtotal": -10.00, "distanceInKm": 5.0, "isRushHour": false }`
+
+| # | Assertion | What it verifies |
+|---|---|---|
+| 1 | Status code is 400 | Validation rejected |
+| 2 | `errors` array mentions `CartSubtotal` | Correct field identified |
+
+#### TC-05: Distance exceeds 100km → 400
+
+**Body:** `{ "cartSubtotal": 25.00, "distanceInKm": 150.0, "isRushHour": false }`
+
+| # | Assertion | What it verifies |
+|---|---|---|
+| 1 | Status code is 400 | Validation rejected |
+| 2 | `errors` array mentions `DistanceInKm` | Correct field identified |
+
+#### TC-06: Negative distance → 400
+
+**Body:** `{ "cartSubtotal": 25.00, "distanceInKm": -5.0, "isRushHour": false }`
+
+| # | Assertion | What it verifies |
+|---|---|---|
+| 1 | Status code is 400 | Validation rejected |
+| 2 | `errors` array mentions `DistanceInKm` | Correct field identified |
+
+#### TC-07: Zero distance → 400
+
+**Body:** `{ "cartSubtotal": 25.00, "distanceInKm": 0, "isRushHour": false }`
+
+| # | Assertion | What it verifies |
+|---|---|---|
+| 1 | Status code is 400 | Validation rejected |
+| 2 | `errors` array mentions `DistanceInKm` | Correct field identified |
+
+#### TC-08: Multiple validation errors → 400 with all errors
+
+**Body:** `{ "cartSubtotal": -5.00, "distanceInKm": 200.0, "isRushHour": false }`
+
+| # | Assertion | What it verifies |
+|---|---|---|
+| 1 | Status code is 400 | Validation rejected |
+| 2 | `errors` array has >= 2 items | All errors returned, not just the first |
+| 3 | Errors mention both `CartSubtotal` and `DistanceInKm` | Both fields identified |
+
+---
+
+### GET /api/orders/{id} — Happy Path
+
+#### TC-09: Get standard order → 200
+
+**Request:** `GET {{baseUrl}}/api/orders/{{standardOrderId}}`
 
 | # | Assertion | What it verifies |
 |---|---|---|
 | 1 | Status code is 200 | Resource exists |
-| 2 | `id` matches `{{orderId}}` | Correct record returned |
-| 3 | `cartSubtotal` is 30.00, `distanceInKm` is 6.0, `isRushHour` is false | Data persisted correctly |
-| 4 | `deliveryFee > 0` | Fee was calculated (not zero for this order) |
+| 2 | `id`, `cartSubtotal`, `distanceInKm`, `isRushHour` match creation | Data persisted correctly |
+| 3 | `deliveryFee == 5` | Fee correct after DB roundtrip |
 
-**Boundary tested:** DB read → domain mapping → fee calculation → JSON serialization
+#### TC-10: Get rush hour order → 200
+
+**Request:** `GET {{baseUrl}}/api/orders/{{rushOrderId}}`
+
+| # | Assertion | What it verifies |
+|---|---|---|
+| 1 | Status code is 200 | Resource exists |
+| 2 | Fields match, `isRushHour == true` | Rush flag persisted |
+| 3 | `deliveryFee == 3` | Surcharge correct after roundtrip |
+
+#### TC-11: Get free delivery order → 200
+
+**Request:** `GET {{baseUrl}}/api/orders/{{freeDeliveryOrderId}}`
+
+| # | Assertion | What it verifies |
+|---|---|---|
+| 1 | Status code is 200 | Resource exists |
+| 2 | `deliveryFee == 0` | Free delivery threshold held |
+
+### GET /api/orders/{id} — Sad Path
+
+#### TC-12: Non-existent order → 404
+
+**Request:** `GET {{baseUrl}}/api/orders/99999`
+
+| # | Assertion | What it verifies |
+|---|---|---|
+| 1 | Status code is 404 | Resource doesn't exist |
+| 2 | Body has `error` and `orderId` (== 99999) | Error schema + correct ID |
 
 ---
 
-### Request 3: Calculate Fee
+### GET /api/orders — Happy Path
 
-**Endpoint:** `POST {{baseUrl}}/api/orders/{{orderId}}/calculate-fee`
+#### TC-13: List all orders → 200 array, sorted
 
-**Test Assertions:**
+**Request:** `GET {{baseUrl}}/api/orders`
 
 | # | Assertion | What it verifies |
 |---|---|---|
 | 1 | Status code is 200 | Endpoint works |
-| 2 | Body has `orderId`, `deliveryFee`, `total` | Schema contract |
-| 3 | `total == cartSubtotal + deliveryFee` | Business rule: total math is correct |
-| 4 | `deliveryFee == 5.00` | Specific business rule: 6km, non-rush = $5 (medium distance) |
-
-**Boundary tested:** DB read → domain model conversion → DeliveryPricingEngine → JSON serialization
+| 2 | Response is an array | Correct shape |
+| 3 | Length >= 3 | Seeded orders present |
+| 4 | Sorted by `createdAt` descending | ORDER BY works |
 
 ---
 
-### Request 4: List All Orders
+### POST /api/orders/{id}/calculate-fee — Happy Path
 
-**Endpoint:** `GET {{baseUrl}}/api/orders`
+#### TC-14: Standard fee = $5.00, total = $35
 
-**Test Assertions:**
+**Request:** `POST {{baseUrl}}/api/orders/{{standardOrderId}}/calculate-fee`
 
 | # | Assertion | What it verifies |
 |---|---|---|
 | 1 | Status code is 200 | Endpoint works |
-| 2 | Response is an array | Correct data shape |
-| 3 | Array length >= 1 | At least the order we created exists |
+| 2 | Body has `orderId`, `cartSubtotal`, `distanceInKm`, `isRushHour`, `deliveryFee`, `total` | Schema contract |
+| 3 | `total == cartSubtotal + deliveryFee` | Arithmetic integrity |
+| 4 | `deliveryFee == 5` | Medium tier through full stack |
 
-**Boundary tested:** DB query (SELECT all) → collection serialization
+#### TC-15: Rush fee = $3.00, total = $23
 
----
-
-### Request 5: Delete Order
-
-**Endpoint:** `DELETE {{baseUrl}}/api/orders/{{orderId}}`
-
-**Test Assertions:**
+**Request:** `POST {{baseUrl}}/api/orders/{{rushOrderId}}/calculate-fee`
 
 | # | Assertion | What it verifies |
 |---|---|---|
-| 1 | Status code is 204 | Resource deleted, no body |
-| 2 | Response body is empty | 204 contract — no content |
+| 1 | Status code is 200 | Endpoint works |
+| 2 | `total == cartSubtotal + deliveryFee` | Arithmetic integrity |
+| 3 | `deliveryFee == 3` | Rush surcharge through full stack |
 
-**Boundary tested:** DB delete → HTTP 204 (no body convention)
+#### TC-16: Free delivery fee = $0.00, total = $60
 
----
-
-### Request 6: Get Deleted Order (404)
-
-**Endpoint:** `GET {{baseUrl}}/api/orders/{{orderId}}`
-
-**Test Assertions:**
+**Request:** `POST {{baseUrl}}/api/orders/{{freeDeliveryOrderId}}/calculate-fee`
 
 | # | Assertion | What it verifies |
 |---|---|---|
-| 1 | Status code is 404 | Resource no longer exists |
-| 2 | Body has `error` and `orderId` properties | Error response schema |
+| 1 | Status code is 200 | Endpoint works |
+| 2 | `deliveryFee == 0` | Free delivery through full stack |
+| 3 | `total == cartSubtotal` | Total = subtotal when fee is zero |
 
-**Boundary tested:** DB read (miss) → 404 error contract
+### POST /api/orders/{id}/calculate-fee — Sad Path
+
+#### TC-17: Non-existent order → 404
+
+**Request:** `POST {{baseUrl}}/api/orders/99999/calculate-fee`
+
+| # | Assertion | What it verifies |
+|---|---|---|
+| 1 | Status code is 404 | Resource doesn't exist |
+| 2 | Body has `error` and `orderId` | Error schema |
+
+---
+
+### DELETE /api/orders/{id} — Happy Path
+
+#### TC-18: Create → Delete → Verify 404 (full lifecycle)
+
+This test case chains **3 requests** to verify the complete delete lifecycle:
+
+| Step | Request | Assertion |
+|---|---|---|
+| 1 | `POST /api/orders` (create temp order) | 201 Created, extract `deleteTargetId` |
+| 2 | `DELETE /api/orders/{{deleteTargetId}}` | 204 No Content, empty body |
+| 3 | `GET /api/orders/{{deleteTargetId}}` | 404 Not Found, error body |
+
+**Boundary tested:** DB insert → DB delete → DB read (miss) → full lifecycle
+
+### DELETE /api/orders/{id} — Sad Path
+
+#### TC-19: Delete non-existent order → 404
+
+**Request:** `DELETE {{baseUrl}}/api/orders/99999`
+
+| # | Assertion | What it verifies |
+|---|---|---|
+| 1 | Status code is 404 | Resource doesn't exist |
+| 2 | Body has `error` and `orderId` | Error schema |
 
 ---
 

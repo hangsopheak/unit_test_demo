@@ -22,8 +22,21 @@ var pricingEngine = new DeliveryPricingEngine();
 
 // ── POST /api/orders ──────────────────────────────────────────
 // Contract: JSON body → 201 Created + Location header + body
+//           OR 400 Bad Request if validation fails
 app.MapPost("/api/orders", async (CreateOrderRequest request, FoodFastDbContext db) =>
 {
+    // Input validation — matches DeliveryPricingEngine constraints
+    var errors = new List<string>();
+    if (request.CartSubtotal < 0)
+        errors.Add("CartSubtotal must be >= 0.");
+    if (request.DistanceInKm <= 0)
+        errors.Add("DistanceInKm must be > 0.");
+    if (request.DistanceInKm > 100)
+        errors.Add("DistanceInKm must be <= 100.");
+
+    if (errors.Count > 0)
+        return Results.BadRequest(new { errors });
+
     var entity = new OrderEntity
     {
         CartSubtotal = request.CartSubtotal,

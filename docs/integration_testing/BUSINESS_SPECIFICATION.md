@@ -75,6 +75,64 @@ The **FoodFast API** exposes the existing delivery pricing domain as a set of HT
 - **Not Found**: `404 Not Found` + `{ error, orderId }` body
 - **Business Rule**: `Total = CartSubtotal + DeliveryFee`
 
+## Validation Rules
+
+The `POST /api/orders` endpoint validates input before creating an order:
+
+| Rule | Condition | Error Message |
+|---|---|---|
+| Cart subtotal non-negative | `CartSubtotal < 0` | "CartSubtotal must be >= 0." |
+| Distance positive | `DistanceInKm <= 0` | "DistanceInKm must be > 0." |
+| Distance within range | `DistanceInKm > 100` | "DistanceInKm must be <= 100." |
+
+- **Response:** `400 Bad Request` with `{ "errors": ["..."] }`
+- **Multiple errors:** All validation errors are returned at once (not short-circuited)
+- **Boundary alignment:** These rules match the `DeliveryPricingEngine` constraints from sessions 1–4
+
+## Error Response Formats
+
+All error responses use JSON. The API produces two distinct shapes:
+
+### 400 Bad Request (Validation Error)
+
+Returned by `POST /api/orders` when input fails validation.
+
+```json
+{
+  "errors": [
+    "CartSubtotal must be >= 0.",
+    "DistanceInKm must be > 0."
+  ]
+}
+```
+
+| Property | Type       | Description                              |
+|----------|------------|------------------------------------------|
+| errors   | string[]   | Array of all validation error messages   |
+
+- The `errors` array may contain 1–3 messages (one per failed rule)
+- All rules are evaluated — errors are not short-circuited
+
+### 404 Not Found
+
+Returned by `GET /api/orders/{id}`, `DELETE /api/orders/{id}`, and `POST /api/orders/{id}/calculate-fee` when the order does not exist.
+
+```json
+{
+  "error": "Order not found",
+  "orderId": 999
+}
+```
+
+| Property | Type   | Description                              |
+|----------|--------|------------------------------------------|
+| error    | string | Fixed message: `"Order not found"`       |
+| orderId  | int    | The requested order ID that was not found|
+
+### 500 Internal Server Error
+
+No custom error handling — ASP.NET Core returns its default 500 response. This is intentional for the demo; production APIs would add global error middleware.
+
 ## Business Rules (Delivery Fee)
 
 These rules are inherited from `DeliveryPricingEngine` (sessions 1–4):
@@ -105,3 +163,5 @@ These rules are inherited from `DeliveryPricingEngine` (sessions 1–4):
 | Calculate fee breakdown | POST `/api/orders/1/calculate-fee` | 200, total = subtotal + fee | Business logic through network |
 | Delete order then GET | DELETE then GET `/api/orders/1` | 204, then 404 | State change + contract enforcement |
 | Rush hour order | POST `{ cartSubtotal: 20, distanceInKm: 3, isRushHour: true }` | 201, fee: $3.00 (2 × 1.5) | Rush hour surcharge through full stack |
+| Negative cart subtotal | POST `{ cartSubtotal: -10, distanceInKm: 5, isRushHour: false }` | 400, `{ errors: ["CartSubtotal must be >= 0."] }` | Validation rejects bad input |
+| Multiple validation errors | POST `{ cartSubtotal: -5, distanceInKm: 200, isRushHour: false }` | 400, `{ errors: ["CartSubtotal must be >= 0.", "DistanceInKm must be <= 100."] }` | All errors returned at once (not short-circuited) |

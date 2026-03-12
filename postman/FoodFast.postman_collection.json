@@ -1,260 +1,946 @@
 {
   "info": {
     "name": "FoodFast API Contract Tests",
-    "description": "Integration tests for the FoodFast Delivery API.\n\nThis collection verifies the full API contract:\n- Status codes (201, 200, 204, 404)\n- Headers (Location, Content-Type)\n- Body schema and business logic\n- Data chaining between requests\n\nRun with Collection Runner for end-to-end verification.",
+    "description": "Integration tests for the FoodFast Delivery API.\n\nOrganized by endpoint, with Happy Path and Sad Path subfolders.\nEach test case (TC-xx) may chain multiple requests to tell a complete story.\n\nRun with Collection Runner for end-to-end verification.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
     {
-      "name": "1. Create Order (POST)",
-      "request": {
-        "method": "POST",
-        "header": [
-          {
-            "key": "Content-Type",
-            "value": "application/json"
-          }
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"cartSubtotal\": 30.00,\n  \"distanceInKm\": 6.0,\n  \"isRushHour\": false\n}"
+      "name": "POST /api/orders",
+      "item": [
+        {
+          "name": "Happy Path",
+          "item": [
+            {
+              "name": "TC-01: Create standard order (6km, non-rush → $5)",
+              "item": [
+                {
+                  "name": "Create order",
+                  "request": {
+                    "method": "POST",
+                    "header": [{ "key": "Content-Type", "value": "application/json" }],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"cartSubtotal\": 30.00,\n  \"distanceInKm\": 6.0,\n  \"isRushHour\": false\n}"
+                    },
+                    "url": {
+                      "raw": "{{baseUrl}}/api/orders",
+                      "host": ["{{baseUrl}}"],
+                      "path": ["api", "orders"]
+                    }
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('Status code is 201 Created', function () {",
+                          "    pm.response.to.have.status(201);",
+                          "});",
+                          "",
+                          "pm.test('Location header is present and valid', function () {",
+                          "    pm.response.to.have.header('Location');",
+                          "    var location = pm.response.headers.get('Location');",
+                          "    pm.expect(location).to.match(/\\/api\\/orders\\/\\d+/);",
+                          "});",
+                          "",
+                          "pm.test('Response body has correct schema', function () {",
+                          "    var json = pm.response.json();",
+                          "    pm.expect(json).to.have.property('id').that.is.a('number');",
+                          "    pm.expect(json).to.have.property('cartSubtotal').that.is.a('number');",
+                          "    pm.expect(json).to.have.property('distanceInKm').that.is.a('number');",
+                          "    pm.expect(json).to.have.property('isRushHour').that.is.a('boolean');",
+                          "    pm.expect(json).to.have.property('deliveryFee').that.is.a('number');",
+                          "    pm.expect(json).to.have.property('createdAt').that.is.a('string');",
+                          "});",
+                          "",
+                          "pm.test('Delivery fee is $5.00 (medium distance tier)', function () {",
+                          "    pm.expect(pm.response.json().deliveryFee).to.eql(5);",
+                          "});",
+                          "",
+                          "pm.test('Chain: save standardOrderId', function () {",
+                          "    pm.environment.set('standardOrderId', pm.response.json().id);",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "TC-02: Create rush hour order (3km, rush → $3)",
+              "item": [
+                {
+                  "name": "Create order",
+                  "request": {
+                    "method": "POST",
+                    "header": [{ "key": "Content-Type", "value": "application/json" }],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"cartSubtotal\": 20.00,\n  \"distanceInKm\": 3.0,\n  \"isRushHour\": true\n}"
+                    },
+                    "url": {
+                      "raw": "{{baseUrl}}/api/orders",
+                      "host": ["{{baseUrl}}"],
+                      "path": ["api", "orders"]
+                    }
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('Status code is 201 Created', function () {",
+                          "    pm.response.to.have.status(201);",
+                          "});",
+                          "",
+                          "pm.test('Fee is $3.00 (short $2 × 1.5 rush surcharge)', function () {",
+                          "    pm.expect(pm.response.json().deliveryFee).to.eql(3);",
+                          "});",
+                          "",
+                          "pm.test('Chain: save rushOrderId', function () {",
+                          "    pm.environment.set('rushOrderId', pm.response.json().id);",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "TC-03: Create free delivery order ($60 cart → $0)",
+              "item": [
+                {
+                  "name": "Create order",
+                  "request": {
+                    "method": "POST",
+                    "header": [{ "key": "Content-Type", "value": "application/json" }],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"cartSubtotal\": 60.00,\n  \"distanceInKm\": 8.0,\n  \"isRushHour\": true\n}"
+                    },
+                    "url": {
+                      "raw": "{{baseUrl}}/api/orders",
+                      "host": ["{{baseUrl}}"],
+                      "path": ["api", "orders"]
+                    }
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('Status code is 201 Created', function () {",
+                          "    pm.response.to.have.status(201);",
+                          "});",
+                          "",
+                          "pm.test('Fee is $0.00 (free delivery: cart >= $50)', function () {",
+                          "    pm.expect(pm.response.json().deliveryFee).to.eql(0);",
+                          "});",
+                          "",
+                          "pm.test('Chain: save freeDeliveryOrderId', function () {",
+                          "    pm.environment.set('freeDeliveryOrderId', pm.response.json().id);",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "response": []
+                }
+              ]
+            }
+          ]
         },
-        "url": {
-          "raw": "{{baseUrl}}/api/orders",
-          "host": ["{{baseUrl}}"],
-          "path": ["api", "orders"]
-        }
-      },
-      "event": [
         {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "// 1. Verify the HTTP Contract (Status Code)",
-              "pm.test('Status code is 201 Created', function () {",
-              "    pm.response.to.have.status(201);",
-              "});",
-              "",
-              "// 2. Verify the Header Contract (Location)",
-              "pm.test('Location header is present and valid', function () {",
-              "    pm.response.to.have.header('Location');",
-              "    var location = pm.response.headers.get('Location');",
-              "    pm.expect(location).to.match(/\\/api\\/orders\\/\\d+/);",
-              "});",
-              "",
-              "// 3. Verify the Body Contract (Schema)",
-              "pm.test('Response body has correct schema', function () {",
-              "    var jsonData = pm.response.json();",
-              "    pm.expect(jsonData).to.have.property('id').that.is.a('number');",
-              "    pm.expect(jsonData).to.have.property('cartSubtotal').that.is.a('number');",
-              "    pm.expect(jsonData).to.have.property('distanceInKm').that.is.a('number');",
-              "    pm.expect(jsonData).to.have.property('isRushHour').that.is.a('boolean');",
-              "    pm.expect(jsonData).to.have.property('deliveryFee').that.is.a('number');",
-              "    pm.expect(jsonData).to.have.property('createdAt').that.is.a('string');",
-              "});",
-              "",
-              "// 4. Verify Business Logic (Fee is non-negative)",
-              "pm.test('Delivery fee is non-negative', function () {",
-              "    var jsonData = pm.response.json();",
-              "    pm.expect(jsonData.deliveryFee).to.be.at.least(0);",
-              "});",
-              "",
-              "// 5. Chain data for subsequent requests",
-              "pm.test('Extract orderId for subsequent requests', function () {",
-              "    var jsonData = pm.response.json();",
-              "    pm.environment.set('orderId', jsonData.id);",
-              "    pm.expect(pm.environment.get('orderId')).to.not.be.undefined;",
-              "});"
-            ]
-          }
+          "name": "Sad Path",
+          "item": [
+            {
+              "name": "TC-04: Negative cart subtotal → 400",
+              "item": [
+                {
+                  "name": "Create order with negative subtotal",
+                  "request": {
+                    "method": "POST",
+                    "header": [{ "key": "Content-Type", "value": "application/json" }],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"cartSubtotal\": -10.00,\n  \"distanceInKm\": 5.0,\n  \"isRushHour\": false\n}"
+                    },
+                    "url": {
+                      "raw": "{{baseUrl}}/api/orders",
+                      "host": ["{{baseUrl}}"],
+                      "path": ["api", "orders"]
+                    }
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('Status code is 400 Bad Request', function () {",
+                          "    pm.response.to.have.status(400);",
+                          "});",
+                          "",
+                          "pm.test('Error mentions CartSubtotal', function () {",
+                          "    var json = pm.response.json();",
+                          "    pm.expect(json).to.have.property('errors').that.is.an('array');",
+                          "    pm.expect(json.errors.join()).to.include('CartSubtotal');",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "TC-05: Distance exceeds 100km → 400",
+              "item": [
+                {
+                  "name": "Create order with distance > 100",
+                  "request": {
+                    "method": "POST",
+                    "header": [{ "key": "Content-Type", "value": "application/json" }],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"cartSubtotal\": 25.00,\n  \"distanceInKm\": 150.0,\n  \"isRushHour\": false\n}"
+                    },
+                    "url": {
+                      "raw": "{{baseUrl}}/api/orders",
+                      "host": ["{{baseUrl}}"],
+                      "path": ["api", "orders"]
+                    }
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('Status code is 400 Bad Request', function () {",
+                          "    pm.response.to.have.status(400);",
+                          "});",
+                          "",
+                          "pm.test('Error mentions DistanceInKm', function () {",
+                          "    var json = pm.response.json();",
+                          "    pm.expect(json).to.have.property('errors').that.is.an('array');",
+                          "    pm.expect(json.errors.join()).to.include('DistanceInKm');",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "TC-06: Negative distance → 400",
+              "item": [
+                {
+                  "name": "Create order with negative distance",
+                  "request": {
+                    "method": "POST",
+                    "header": [{ "key": "Content-Type", "value": "application/json" }],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"cartSubtotal\": 25.00,\n  \"distanceInKm\": -5.0,\n  \"isRushHour\": false\n}"
+                    },
+                    "url": {
+                      "raw": "{{baseUrl}}/api/orders",
+                      "host": ["{{baseUrl}}"],
+                      "path": ["api", "orders"]
+                    }
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('Status code is 400 Bad Request', function () {",
+                          "    pm.response.to.have.status(400);",
+                          "});",
+                          "",
+                          "pm.test('Error mentions DistanceInKm', function () {",
+                          "    var json = pm.response.json();",
+                          "    pm.expect(json).to.have.property('errors').that.is.an('array');",
+                          "    pm.expect(json.errors.join()).to.include('DistanceInKm');",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "TC-07: Zero distance → 400",
+              "item": [
+                {
+                  "name": "Create order with zero distance",
+                  "request": {
+                    "method": "POST",
+                    "header": [{ "key": "Content-Type", "value": "application/json" }],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"cartSubtotal\": 25.00,\n  \"distanceInKm\": 0,\n  \"isRushHour\": false\n}"
+                    },
+                    "url": {
+                      "raw": "{{baseUrl}}/api/orders",
+                      "host": ["{{baseUrl}}"],
+                      "path": ["api", "orders"]
+                    }
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('Status code is 400 Bad Request', function () {",
+                          "    pm.response.to.have.status(400);",
+                          "});",
+                          "",
+                          "pm.test('Error mentions DistanceInKm', function () {",
+                          "    var json = pm.response.json();",
+                          "    pm.expect(json).to.have.property('errors').that.is.an('array');",
+                          "    pm.expect(json.errors.join()).to.include('DistanceInKm');",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "TC-08: Multiple validation errors → 400 with all errors",
+              "item": [
+                {
+                  "name": "Create order with negative subtotal AND distance > 100",
+                  "request": {
+                    "method": "POST",
+                    "header": [{ "key": "Content-Type", "value": "application/json" }],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"cartSubtotal\": -5.00,\n  \"distanceInKm\": 200.0,\n  \"isRushHour\": false\n}"
+                    },
+                    "url": {
+                      "raw": "{{baseUrl}}/api/orders",
+                      "host": ["{{baseUrl}}"],
+                      "path": ["api", "orders"]
+                    }
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('Status code is 400 Bad Request', function () {",
+                          "    pm.response.to.have.status(400);",
+                          "});",
+                          "",
+                          "pm.test('Returns multiple validation errors', function () {",
+                          "    var json = pm.response.json();",
+                          "    pm.expect(json.errors).to.be.an('array');",
+                          "    pm.expect(json.errors.length).to.be.at.least(2);",
+                          "});",
+                          "",
+                          "pm.test('Errors mention both CartSubtotal and DistanceInKm', function () {",
+                          "    var combined = pm.response.json().errors.join();",
+                          "    pm.expect(combined).to.include('CartSubtotal');",
+                          "    pm.expect(combined).to.include('DistanceInKm');",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "response": []
+                }
+              ]
+            }
+          ]
         }
-      ],
-      "response": []
+      ]
     },
     {
-      "name": "2. Get Order by ID (GET)",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "{{baseUrl}}/api/orders/{{orderId}}",
-          "host": ["{{baseUrl}}"],
-          "path": ["api", "orders", "{{orderId}}"]
-        }
-      },
-      "event": [
+      "name": "GET /api/orders/{id}",
+      "item": [
         {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "pm.test('Status code is 200 OK', function () {",
-              "    pm.response.to.have.status(200);",
-              "});",
-              "",
-              "pm.test('Returned order matches what was created', function () {",
-              "    var jsonData = pm.response.json();",
-              "    pm.expect(jsonData.id).to.eql(parseInt(pm.environment.get('orderId')));",
-              "    pm.expect(jsonData.cartSubtotal).to.eql(30);",
-              "    pm.expect(jsonData.distanceInKm).to.eql(6);",
-              "    pm.expect(jsonData.isRushHour).to.eql(false);",
-              "});",
-              "",
-              "pm.test('Delivery fee is calculated (not zero for non-free-delivery order)', function () {",
-              "    var jsonData = pm.response.json();",
-              "    pm.expect(jsonData.deliveryFee).to.be.above(0);",
-              "});"
-            ]
-          }
+          "name": "Happy Path",
+          "item": [
+            {
+              "name": "TC-09: Get standard order → 200 with correct fields",
+              "item": [
+                {
+                  "name": "Get standard order by ID",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/orders/{{standardOrderId}}",
+                      "host": ["{{baseUrl}}"],
+                      "path": ["api", "orders", "{{standardOrderId}}"]
+                    }
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('Status code is 200 OK', function () {",
+                          "    pm.response.to.have.status(200);",
+                          "});",
+                          "",
+                          "pm.test('Order fields match creation values', function () {",
+                          "    var json = pm.response.json();",
+                          "    pm.expect(json.id).to.eql(parseInt(pm.environment.get('standardOrderId')));",
+                          "    pm.expect(json.cartSubtotal).to.eql(30);",
+                          "    pm.expect(json.distanceInKm).to.eql(6);",
+                          "    pm.expect(json.isRushHour).to.eql(false);",
+                          "});",
+                          "",
+                          "pm.test('Delivery fee is $5.00', function () {",
+                          "    pm.expect(pm.response.json().deliveryFee).to.eql(5);",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "TC-10: Get rush hour order → 200 with surcharge",
+              "item": [
+                {
+                  "name": "Get rush hour order by ID",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/orders/{{rushOrderId}}",
+                      "host": ["{{baseUrl}}"],
+                      "path": ["api", "orders", "{{rushOrderId}}"]
+                    }
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('Status code is 200 OK', function () {",
+                          "    pm.response.to.have.status(200);",
+                          "});",
+                          "",
+                          "pm.test('Rush hour fields match', function () {",
+                          "    var json = pm.response.json();",
+                          "    pm.expect(json.cartSubtotal).to.eql(20);",
+                          "    pm.expect(json.distanceInKm).to.eql(3);",
+                          "    pm.expect(json.isRushHour).to.eql(true);",
+                          "});",
+                          "",
+                          "pm.test('Fee is $3.00 (rush surcharge applied)', function () {",
+                          "    pm.expect(pm.response.json().deliveryFee).to.eql(3);",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "TC-11: Get free delivery order → 200 with $0 fee",
+              "item": [
+                {
+                  "name": "Get free delivery order by ID",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/orders/{{freeDeliveryOrderId}}",
+                      "host": ["{{baseUrl}}"],
+                      "path": ["api", "orders", "{{freeDeliveryOrderId}}"]
+                    }
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('Status code is 200 OK', function () {",
+                          "    pm.response.to.have.status(200);",
+                          "});",
+                          "",
+                          "pm.test('Free delivery: fee is $0.00', function () {",
+                          "    pm.expect(pm.response.json().deliveryFee).to.eql(0);",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "response": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Sad Path",
+          "item": [
+            {
+              "name": "TC-12: Get non-existent order → 404",
+              "item": [
+                {
+                  "name": "Get order 99999",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/orders/99999",
+                      "host": ["{{baseUrl}}"],
+                      "path": ["api", "orders", "99999"]
+                    }
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('Status code is 404 Not Found', function () {",
+                          "    pm.response.to.have.status(404);",
+                          "});",
+                          "",
+                          "pm.test('Error body has correct shape', function () {",
+                          "    var json = pm.response.json();",
+                          "    pm.expect(json).to.have.property('error');",
+                          "    pm.expect(json).to.have.property('orderId');",
+                          "    pm.expect(json.orderId).to.eql(99999);",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "response": []
+                }
+              ]
+            }
+          ]
         }
-      ],
-      "response": []
+      ]
     },
     {
-      "name": "3. Calculate Fee (POST)",
-      "request": {
-        "method": "POST",
-        "header": [],
-        "url": {
-          "raw": "{{baseUrl}}/api/orders/{{orderId}}/calculate-fee",
-          "host": ["{{baseUrl}}"],
-          "path": ["api", "orders", "{{orderId}}", "calculate-fee"]
-        }
-      },
-      "event": [
+      "name": "GET /api/orders",
+      "item": [
         {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "pm.test('Status code is 200 OK', function () {",
-              "    pm.response.to.have.status(200);",
-              "});",
-              "",
-              "pm.test('Fee breakdown has all required fields', function () {",
-              "    var jsonData = pm.response.json();",
-              "    pm.expect(jsonData).to.have.property('orderId');",
-              "    pm.expect(jsonData).to.have.property('cartSubtotal');",
-              "    pm.expect(jsonData).to.have.property('distanceInKm');",
-              "    pm.expect(jsonData).to.have.property('isRushHour');",
-              "    pm.expect(jsonData).to.have.property('deliveryFee');",
-              "    pm.expect(jsonData).to.have.property('total');",
-              "});",
-              "",
-              "pm.test('Total equals cartSubtotal + deliveryFee', function () {",
-              "    var jsonData = pm.response.json();",
-              "    var expectedTotal = jsonData.cartSubtotal + jsonData.deliveryFee;",
-              "    pm.expect(jsonData.total).to.eql(expectedTotal);",
-              "});",
-              "",
-              "pm.test('Fee for 6km non-rush order is $5.00 (medium distance tier)', function () {",
-              "    var jsonData = pm.response.json();",
-              "    pm.expect(jsonData.deliveryFee).to.eql(5);",
-              "});"
-            ]
-          }
+          "name": "Happy Path",
+          "item": [
+            {
+              "name": "TC-13: List all orders → 200 array, sorted",
+              "item": [
+                {
+                  "name": "Get all orders",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/orders",
+                      "host": ["{{baseUrl}}"],
+                      "path": ["api", "orders"]
+                    }
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('Status code is 200 OK', function () {",
+                          "    pm.response.to.have.status(200);",
+                          "});",
+                          "",
+                          "pm.test('Response is an array', function () {",
+                          "    pm.expect(pm.response.json()).to.be.an('array');",
+                          "});",
+                          "",
+                          "pm.test('Array contains at least 3 orders', function () {",
+                          "    pm.expect(pm.response.json().length).to.be.at.least(3);",
+                          "});",
+                          "",
+                          "pm.test('Orders sorted by createdAt descending', function () {",
+                          "    var data = pm.response.json();",
+                          "    if (data.length >= 2) {",
+                          "        var first = new Date(data[0].createdAt);",
+                          "        var second = new Date(data[1].createdAt);",
+                          "        pm.expect(first.getTime()).to.be.at.least(second.getTime());",
+                          "    }",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "response": []
+                }
+              ]
+            }
+          ]
         }
-      ],
-      "response": []
+      ]
     },
     {
-      "name": "4. Get All Orders (GET)",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "{{baseUrl}}/api/orders",
-          "host": ["{{baseUrl}}"],
-          "path": ["api", "orders"]
-        }
-      },
-      "event": [
+      "name": "POST /api/orders/{id}/calculate-fee",
+      "item": [
         {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "pm.test('Status code is 200 OK', function () {",
-              "    pm.response.to.have.status(200);",
-              "});",
-              "",
-              "pm.test('Response is an array', function () {",
-              "    var jsonData = pm.response.json();",
-              "    pm.expect(jsonData).to.be.an('array');",
-              "});",
-              "",
-              "pm.test('Array contains at least one order', function () {",
-              "    var jsonData = pm.response.json();",
-              "    pm.expect(jsonData.length).to.be.at.least(1);",
-              "});"
-            ]
-          }
+          "name": "Happy Path",
+          "item": [
+            {
+              "name": "TC-14: Calculate fee — standard order ($5, total = $35)",
+              "item": [
+                {
+                  "name": "Calculate fee for standard order",
+                  "request": {
+                    "method": "POST",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/orders/{{standardOrderId}}/calculate-fee",
+                      "host": ["{{baseUrl}}"],
+                      "path": ["api", "orders", "{{standardOrderId}}", "calculate-fee"]
+                    }
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('Status code is 200 OK', function () {",
+                          "    pm.response.to.have.status(200);",
+                          "});",
+                          "",
+                          "pm.test('Fee breakdown has all required fields', function () {",
+                          "    var json = pm.response.json();",
+                          "    pm.expect(json).to.have.property('orderId');",
+                          "    pm.expect(json).to.have.property('cartSubtotal');",
+                          "    pm.expect(json).to.have.property('distanceInKm');",
+                          "    pm.expect(json).to.have.property('isRushHour');",
+                          "    pm.expect(json).to.have.property('deliveryFee');",
+                          "    pm.expect(json).to.have.property('total');",
+                          "});",
+                          "",
+                          "pm.test('Total equals cartSubtotal + deliveryFee', function () {",
+                          "    var json = pm.response.json();",
+                          "    pm.expect(json.total).to.eql(json.cartSubtotal + json.deliveryFee);",
+                          "});",
+                          "",
+                          "pm.test('Fee is $5.00 (6km medium tier)', function () {",
+                          "    pm.expect(pm.response.json().deliveryFee).to.eql(5);",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "TC-15: Calculate fee — rush hour order ($3, total = $23)",
+              "item": [
+                {
+                  "name": "Calculate fee for rush hour order",
+                  "request": {
+                    "method": "POST",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/orders/{{rushOrderId}}/calculate-fee",
+                      "host": ["{{baseUrl}}"],
+                      "path": ["api", "orders", "{{rushOrderId}}", "calculate-fee"]
+                    }
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('Status code is 200 OK', function () {",
+                          "    pm.response.to.have.status(200);",
+                          "});",
+                          "",
+                          "pm.test('Total equals cartSubtotal + deliveryFee', function () {",
+                          "    var json = pm.response.json();",
+                          "    pm.expect(json.total).to.eql(json.cartSubtotal + json.deliveryFee);",
+                          "});",
+                          "",
+                          "pm.test('Fee is $3.00 ($2 × 1.5 rush surcharge)', function () {",
+                          "    pm.expect(pm.response.json().deliveryFee).to.eql(3);",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "response": []
+                }
+              ]
+            },
+            {
+              "name": "TC-16: Calculate fee — free delivery ($0, total = $60)",
+              "item": [
+                {
+                  "name": "Calculate fee for free delivery order",
+                  "request": {
+                    "method": "POST",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/orders/{{freeDeliveryOrderId}}/calculate-fee",
+                      "host": ["{{baseUrl}}"],
+                      "path": ["api", "orders", "{{freeDeliveryOrderId}}", "calculate-fee"]
+                    }
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('Status code is 200 OK', function () {",
+                          "    pm.response.to.have.status(200);",
+                          "});",
+                          "",
+                          "pm.test('Fee is $0.00 (free delivery: cart >= $50)', function () {",
+                          "    pm.expect(pm.response.json().deliveryFee).to.eql(0);",
+                          "});",
+                          "",
+                          "pm.test('Total equals cartSubtotal when fee is zero', function () {",
+                          "    var json = pm.response.json();",
+                          "    pm.expect(json.total).to.eql(json.cartSubtotal);",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "response": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Sad Path",
+          "item": [
+            {
+              "name": "TC-17: Calculate fee — non-existent order → 404",
+              "item": [
+                {
+                  "name": "Calculate fee for order 99999",
+                  "request": {
+                    "method": "POST",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/orders/99999/calculate-fee",
+                      "host": ["{{baseUrl}}"],
+                      "path": ["api", "orders", "99999", "calculate-fee"]
+                    }
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('Status code is 404 Not Found', function () {",
+                          "    pm.response.to.have.status(404);",
+                          "});",
+                          "",
+                          "pm.test('Error body has correct shape', function () {",
+                          "    var json = pm.response.json();",
+                          "    pm.expect(json).to.have.property('error');",
+                          "    pm.expect(json).to.have.property('orderId');",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "response": []
+                }
+              ]
+            }
+          ]
         }
-      ],
-      "response": []
+      ]
     },
     {
-      "name": "5. Delete Order (DELETE)",
-      "request": {
-        "method": "DELETE",
-        "header": [],
-        "url": {
-          "raw": "{{baseUrl}}/api/orders/{{orderId}}",
-          "host": ["{{baseUrl}}"],
-          "path": ["api", "orders", "{{orderId}}"]
-        }
-      },
-      "event": [
+      "name": "DELETE /api/orders/{id}",
+      "item": [
         {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "pm.test('Status code is 204 No Content', function () {",
-              "    pm.response.to.have.status(204);",
-              "});",
-              "",
-              "pm.test('Response body is empty', function () {",
-              "    pm.expect(pm.response.text()).to.be.empty;",
-              "});"
-            ]
-          }
-        }
-      ],
-      "response": []
-    },
-    {
-      "name": "6. Get Deleted Order — 404 (GET)",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "{{baseUrl}}/api/orders/{{orderId}}",
-          "host": ["{{baseUrl}}"],
-          "path": ["api", "orders", "{{orderId}}"]
-        }
-      },
-      "event": [
+          "name": "Happy Path",
+          "item": [
+            {
+              "name": "TC-18: Create → Delete → Verify 404 (full lifecycle)",
+              "item": [
+                {
+                  "name": "Step 1: Create a temporary order",
+                  "request": {
+                    "method": "POST",
+                    "header": [{ "key": "Content-Type", "value": "application/json" }],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"cartSubtotal\": 15.00,\n  \"distanceInKm\": 2.0,\n  \"isRushHour\": false\n}"
+                    },
+                    "url": {
+                      "raw": "{{baseUrl}}/api/orders",
+                      "host": ["{{baseUrl}}"],
+                      "path": ["api", "orders"]
+                    }
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('Setup: order created (201)', function () {",
+                          "    pm.response.to.have.status(201);",
+                          "});",
+                          "",
+                          "pm.test('Chain: save deleteTargetId', function () {",
+                          "    pm.environment.set('deleteTargetId', pm.response.json().id);",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "response": []
+                },
+                {
+                  "name": "Step 2: Delete the order → 204",
+                  "request": {
+                    "method": "DELETE",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/orders/{{deleteTargetId}}",
+                      "host": ["{{baseUrl}}"],
+                      "path": ["api", "orders", "{{deleteTargetId}}"]
+                    }
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('Status code is 204 No Content', function () {",
+                          "    pm.response.to.have.status(204);",
+                          "});",
+                          "",
+                          "pm.test('Response body is empty', function () {",
+                          "    pm.expect(pm.response.text()).to.be.empty;",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "response": []
+                },
+                {
+                  "name": "Step 3: Verify deleted order → 404",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/orders/{{deleteTargetId}}",
+                      "host": ["{{baseUrl}}"],
+                      "path": ["api", "orders", "{{deleteTargetId}}"]
+                    }
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('Status code is 404 Not Found', function () {",
+                          "    pm.response.to.have.status(404);",
+                          "});",
+                          "",
+                          "pm.test('Error confirms order is gone', function () {",
+                          "    var json = pm.response.json();",
+                          "    pm.expect(json).to.have.property('error');",
+                          "    pm.expect(json).to.have.property('orderId');",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "response": []
+                }
+              ]
+            }
+          ]
+        },
         {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "pm.test('Status code is 404 Not Found', function () {",
-              "    pm.response.to.have.status(404);",
-              "});",
-              "",
-              "pm.test('Error response has correct shape', function () {",
-              "    var jsonData = pm.response.json();",
-              "    pm.expect(jsonData).to.have.property('error');",
-              "    pm.expect(jsonData).to.have.property('orderId');",
-              "});"
-            ]
-          }
+          "name": "Sad Path",
+          "item": [
+            {
+              "name": "TC-19: Delete non-existent order → 404",
+              "item": [
+                {
+                  "name": "Delete order 99999",
+                  "request": {
+                    "method": "DELETE",
+                    "header": [],
+                    "url": {
+                      "raw": "{{baseUrl}}/api/orders/99999",
+                      "host": ["{{baseUrl}}"],
+                      "path": ["api", "orders", "99999"]
+                    }
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "pm.test('Status code is 404 Not Found', function () {",
+                          "    pm.response.to.have.status(404);",
+                          "});",
+                          "",
+                          "pm.test('Error body has correct shape', function () {",
+                          "    var json = pm.response.json();",
+                          "    pm.expect(json).to.have.property('error');",
+                          "    pm.expect(json).to.have.property('orderId');",
+                          "});"
+                        ]
+                      }
+                    }
+                  ],
+                  "response": []
+                }
+              ]
+            }
+          ]
         }
-      ],
-      "response": []
+      ]
     }
   ]
 }
