@@ -21,7 +21,7 @@
                     "header": [{ "key": "Content-Type", "value": "application/json" }],
                     "body": {
                       "mode": "raw",
-                      "raw": "{\n  \"cartSubtotal\": 30.00,\n  \"distanceInKm\": 6.0,\n  \"isRushHour\": false\n}"
+                      "raw": "{\n  \"customerName\": \"Alice\",\n  \"cartSubtotal\": 30.00,\n  \"distanceInKm\": 6.0,\n  \"isRushHour\": false\n}"
                     },
                     "url": {
                       "raw": "{{baseUrl}}/api/orders",
@@ -48,6 +48,7 @@
                           "pm.test('Response body has correct schema', function () {",
                           "    var json = pm.response.json();",
                           "    pm.expect(json).to.have.property('id').that.is.a('number');",
+                          "    pm.expect(json).to.have.property('customerName').that.is.a('string');",
                           "    pm.expect(json).to.have.property('cartSubtotal').that.is.a('number');",
                           "    pm.expect(json).to.have.property('distanceInKm').that.is.a('number');",
                           "    pm.expect(json).to.have.property('isRushHour').that.is.a('boolean');",
@@ -80,7 +81,7 @@
                     "header": [{ "key": "Content-Type", "value": "application/json" }],
                     "body": {
                       "mode": "raw",
-                      "raw": "{\n  \"cartSubtotal\": 20.00,\n  \"distanceInKm\": 3.0,\n  \"isRushHour\": true\n}"
+                      "raw": "{\n  \"customerName\": \"Bob\",\n  \"cartSubtotal\": 20.00,\n  \"distanceInKm\": 3.0,\n  \"isRushHour\": true\n}"
                     },
                     "url": {
                       "raw": "{{baseUrl}}/api/orders",
@@ -123,7 +124,7 @@
                     "header": [{ "key": "Content-Type", "value": "application/json" }],
                     "body": {
                       "mode": "raw",
-                      "raw": "{\n  \"cartSubtotal\": 60.00,\n  \"distanceInKm\": 8.0,\n  \"isRushHour\": true\n}"
+                      "raw": "{\n  \"customerName\": \"Charlie\",\n  \"cartSubtotal\": 60.00,\n  \"distanceInKm\": 8.0,\n  \"isRushHour\": true\n}"
                     },
                     "url": {
                       "raw": "{{baseUrl}}/api/orders",
@@ -171,7 +172,7 @@
                     "header": [{ "key": "Content-Type", "value": "application/json" }],
                     "body": {
                       "mode": "raw",
-                      "raw": "{\n  \"cartSubtotal\": -10.00,\n  \"distanceInKm\": 5.0,\n  \"isRushHour\": false\n}"
+                      "raw": "{\n  \"customerName\": \"Test\",\n  \"cartSubtotal\": -10.00,\n  \"distanceInKm\": 5.0,\n  \"isRushHour\": false\n}"
                     },
                     "url": {
                       "raw": "{{baseUrl}}/api/orders",
@@ -212,7 +213,7 @@
                     "header": [{ "key": "Content-Type", "value": "application/json" }],
                     "body": {
                       "mode": "raw",
-                      "raw": "{\n  \"cartSubtotal\": 25.00,\n  \"distanceInKm\": 150.0,\n  \"isRushHour\": false\n}"
+                      "raw": "{\n  \"customerName\": \"Test\",\n  \"cartSubtotal\": 25.00,\n  \"distanceInKm\": 150.0,\n  \"isRushHour\": false\n}"
                     },
                     "url": {
                       "raw": "{{baseUrl}}/api/orders",
@@ -253,7 +254,7 @@
                     "header": [{ "key": "Content-Type", "value": "application/json" }],
                     "body": {
                       "mode": "raw",
-                      "raw": "{\n  \"cartSubtotal\": 25.00,\n  \"distanceInKm\": -5.0,\n  \"isRushHour\": false\n}"
+                      "raw": "{\n  \"customerName\": \"Test\",\n  \"cartSubtotal\": 25.00,\n  \"distanceInKm\": -5.0,\n  \"isRushHour\": false\n}"
                     },
                     "url": {
                       "raw": "{{baseUrl}}/api/orders",
@@ -294,7 +295,7 @@
                     "header": [{ "key": "Content-Type", "value": "application/json" }],
                     "body": {
                       "mode": "raw",
-                      "raw": "{\n  \"cartSubtotal\": 25.00,\n  \"distanceInKm\": 0,\n  \"isRushHour\": false\n}"
+                      "raw": "{\n  \"customerName\": \"Test\",\n  \"cartSubtotal\": 25.00,\n  \"distanceInKm\": 0,\n  \"isRushHour\": false\n}"
                     },
                     "url": {
                       "raw": "{{baseUrl}}/api/orders",
@@ -335,7 +336,7 @@
                     "header": [{ "key": "Content-Type", "value": "application/json" }],
                     "body": {
                       "mode": "raw",
-                      "raw": "{\n  \"cartSubtotal\": -5.00,\n  \"distanceInKm\": 200.0,\n  \"isRushHour\": false\n}"
+                      "raw": "{\n  \"customerName\": \"Test\",\n  \"cartSubtotal\": -5.00,\n  \"distanceInKm\": 200.0,\n  \"isRushHour\": false\n}"
                     },
                     "url": {
                       "raw": "{{baseUrl}}/api/orders",
@@ -805,7 +806,7 @@
                     "header": [{ "key": "Content-Type", "value": "application/json" }],
                     "body": {
                       "mode": "raw",
-                      "raw": "{\n  \"cartSubtotal\": 15.00,\n  \"distanceInKm\": 2.0,\n  \"isRushHour\": false\n}"
+                      "raw": "{\n  \"customerName\": \"Delete Target\",\n  \"cartSubtotal\": 15.00,\n  \"distanceInKm\": 2.0,\n  \"isRushHour\": false\n}"
                     },
                     "url": {
                       "raw": "{{baseUrl}}/api/orders",

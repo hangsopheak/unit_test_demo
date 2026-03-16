@@ -9,13 +9,41 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<FoodFastDbContext>(options =>
     options.UseSqlite("Data Source=foodfast.db"));
 
+// Allow the React frontend (different port) to call our API
+builder.Services.AddCors();
+
 var app = builder.Build();
 
-// Ensure DB exists on startup
+app.UseCors(policy => policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+
+// Ensure DB exists on startup + seed sample data
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<FoodFastDbContext>();
     db.Database.EnsureCreated();
+
+    if (!db.Orders.Any())
+    {
+        var names = new[]
+        {
+            "Alice", "Bob", "Charlie", "Dave", "Eve", "Frank", "Grace", "Hank", "Ivy", "Jack",
+            "Karen", "Leo", "Mia", "Noah", "Olivia", "Paul", "Quinn", "Ruby", "Sam", "Tina"
+        };
+        var random = new Random(42); // Fixed seed for reproducible data
+
+        for (int i = 0; i < 100; i++)
+        {
+            db.Orders.Add(new OrderEntity
+            {
+                CustomerName = names[i % names.Length],
+                CartSubtotal = Math.Round((decimal)(random.NextDouble() * 80 + 5), 2),   // $5 – $85
+                DistanceInKm = Math.Round(random.NextDouble() * 30 + 1, 1),              // 1 – 31 km
+                IsRushHour = random.Next(3) == 0,                                         // ~33% rush hour
+                CreatedAt = DateTime.UtcNow.AddMinutes(-(100 - i))                        // oldest first
+            });
+        }
+        db.SaveChanges();
+    }
 }
 
 var pricingEngine = new DeliveryPricingEngine();
@@ -27,6 +55,8 @@ app.MapPost("/api/orders", async (CreateOrderRequest request, FoodFastDbContext 
 {
     // Input validation — matches DeliveryPricingEngine constraints
     var errors = new List<string>();
+    if (string.IsNullOrWhiteSpace(request.CustomerName))
+        errors.Add("CustomerName is required.");
     if (request.CartSubtotal < 0)
         errors.Add("CartSubtotal must be >= 0.");
     if (request.DistanceInKm <= 0)
@@ -39,6 +69,7 @@ app.MapPost("/api/orders", async (CreateOrderRequest request, FoodFastDbContext 
 
     var entity = new OrderEntity
     {
+        CustomerName = request.CustomerName.Trim(),
         CartSubtotal = request.CartSubtotal,
         DistanceInKm = request.DistanceInKm,
         IsRushHour = request.IsRushHour,
@@ -105,6 +136,7 @@ app.MapPost("/api/orders/{id:int}/calculate-fee", async (int id, FoodFastDbConte
     return Results.Ok(new
     {
         orderId = entity.Id,
+        customerName = entity.CustomerName,
         cartSubtotal = entity.CartSubtotal,
         distanceInKm = entity.DistanceInKm,
         isRushHour = entity.IsRushHour,
@@ -128,6 +160,7 @@ static OrderResponse MapToResponse(OrderEntity entity, DeliveryPricingEngine eng
     return new OrderResponse
     {
         Id = entity.Id,
+        CustomerName = entity.CustomerName,
         CartSubtotal = entity.CartSubtotal,
         DistanceInKm = entity.DistanceInKm,
         IsRushHour = entity.IsRushHour,
@@ -141,7 +174,7 @@ static OrderResponse MapToResponse(OrderEntity entity, DeliveryPricingEngine eng
 /// <summary>
 /// Request body for creating a delivery order.
 /// </summary>
-public record CreateOrderRequest(decimal CartSubtotal, double DistanceInKm, bool IsRushHour);
+public record CreateOrderRequest(string CustomerName, decimal CartSubtotal, double DistanceInKm, bool IsRushHour);
 
 /// <summary>
 /// Response body returned for delivery orders.
@@ -149,6 +182,7 @@ public record CreateOrderRequest(decimal CartSubtotal, double DistanceInKm, bool
 public class OrderResponse
 {
     public int Id { get; set; }
+    public string CustomerName { get; set; } = string.Empty;
     public decimal CartSubtotal { get; set; }
     public double DistanceInKm { get; set; }
     public bool IsRushHour { get; set; }

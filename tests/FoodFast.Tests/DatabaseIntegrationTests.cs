@@ -53,6 +53,7 @@ public class DatabaseIntegrationTests : IDisposable
         // Arrange
         var entity = new OrderEntity
         {
+            CustomerName = "Alice",
             CartSubtotal = 30.00m,
             DistanceInKm = 6.0,
             IsRushHour = false,
@@ -70,6 +71,7 @@ public class DatabaseIntegrationTests : IDisposable
         // Assert — every field survived the roundtrip
         Assert.NotNull(loaded);
         Assert.Equal(entity.Id, loaded.Id);
+        Assert.Equal("Alice", loaded.CustomerName);
         Assert.Equal(30.00m, loaded.CartSubtotal);
         Assert.Equal(6.0, loaded.DistanceInKm);
         Assert.False(loaded.IsRushHour);
@@ -86,6 +88,7 @@ public class DatabaseIntegrationTests : IDisposable
         // Arrange
         var entity = new OrderEntity
         {
+            CustomerName = "Bob",
             CartSubtotal = 25.00m,
             DistanceInKm = 3.0,
             IsRushHour = true,
@@ -115,6 +118,7 @@ public class DatabaseIntegrationTests : IDisposable
         // Arrange — a price that could lose precision
         var entity = new OrderEntity
         {
+            CustomerName = "Charlie",
             CartSubtotal = 30.99m,
             DistanceInKm = 7.5,
             IsRushHour = false,
@@ -142,6 +146,7 @@ public class DatabaseIntegrationTests : IDisposable
         // Arrange
         var entity = new OrderEntity
         {
+            CustomerName = "Dave",
             CartSubtotal = 30.00m,
             DistanceInKm = 6.0,
             IsRushHour = false,
@@ -180,6 +185,7 @@ public class DatabaseIntegrationTests : IDisposable
         // Arrange — create an order
         var entity = new OrderEntity
         {
+            CustomerName = "Eve",
             CartSubtotal = 20.00m,
             DistanceInKm = 2.0,
             IsRushHour = false,
@@ -211,8 +217,8 @@ public class DatabaseIntegrationTests : IDisposable
     public async Task CreateTwoOrders_GetDifferentIds()
     {
         // Arrange
-        var order1 = new OrderEntity { CartSubtotal = 10m, DistanceInKm = 1.0, IsRushHour = false, CreatedAt = DateTime.UtcNow };
-        var order2 = new OrderEntity { CartSubtotal = 20m, DistanceInKm = 2.0, IsRushHour = true, CreatedAt = DateTime.UtcNow };
+        var order1 = new OrderEntity { CustomerName = "Frank", CartSubtotal = 10m, DistanceInKm = 1.0, IsRushHour = false, CreatedAt = DateTime.UtcNow };
+        var order2 = new OrderEntity { CustomerName = "Grace", CartSubtotal = 20m, DistanceInKm = 2.0, IsRushHour = true, CreatedAt = DateTime.UtcNow };
 
         // Act
         _db.Orders.AddRange(order1, order2);
@@ -232,8 +238,8 @@ public class DatabaseIntegrationTests : IDisposable
     public async Task GetAllOrders_OrderedByCreatedAtDescending()
     {
         // Arrange
-        var older = new OrderEntity { CartSubtotal = 10m, DistanceInKm = 1.0, IsRushHour = false, CreatedAt = new DateTime(2026, 1, 1) };
-        var newer = new OrderEntity { CartSubtotal = 20m, DistanceInKm = 2.0, IsRushHour = true, CreatedAt = new DateTime(2026, 3, 10) };
+        var older = new OrderEntity { CustomerName = "Hank", CartSubtotal = 10m, DistanceInKm = 1.0, IsRushHour = false, CreatedAt = new DateTime(2026, 1, 1) };
+        var newer = new OrderEntity { CustomerName = "Ivy", CartSubtotal = 20m, DistanceInKm = 2.0, IsRushHour = true, CreatedAt = new DateTime(2026, 3, 10) };
         _db.Orders.AddRange(older, newer);
         await _db.SaveChangesAsync();
 

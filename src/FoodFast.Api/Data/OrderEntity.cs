@@ -7,6 +7,7 @@ namespace FoodFast.Api.Data;
 public class OrderEntity
 {
     public int Id { get; set; }
+    public string CustomerName { get; set; } = string.Empty;
     public decimal CartSubtotal { get; set; }
     public double DistanceInKm { get; set; }
     public bool IsRushHour { get; set; }
