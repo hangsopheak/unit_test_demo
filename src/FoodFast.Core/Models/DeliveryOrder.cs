@@ -3,9 +3,12 @@ namespace FoodFast.Core.Models;
 /// <summary>
 /// Data Transfer Object representing a delivery order.
 /// </summary>
-public class DeliveryOrder
+public class DeliveryOrder 
 {
     private decimal _cartSubtotal;
+    
+    public override string ToString() => 
+        $"Sub: {CartSubtotal}, Dist: {DistanceInKm}, Rush: {IsRushHour}";
 
     /// <summary>
     /// Gets or sets the subtotal of items in the shopping cart.

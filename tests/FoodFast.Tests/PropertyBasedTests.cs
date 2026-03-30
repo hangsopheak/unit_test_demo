@@ -54,7 +54,8 @@ public class PropertyBasedTests
     #region Part 1: Invariant Properties
 
     // Rule: fee is always >= 0 for any valid order
-    [Property]
+    //[Property(MaxTest = 1000000)]
+    [Property(MaxTest = 10000000)]
     public Property CalculateFee_ForAnyValidOrder_FeeIsNeverNegative() =>
         Prop.ForAll(GenValidOrder(), order =>
             _sut.CalculateFee(order) >= 0);
@@ -109,7 +110,7 @@ public class PropertyBasedTests
     }
 
     // Oracle property: real engine must match naive version for every valid input
-    [Property]
+    [Property(MaxTest = 10000000)]
     public Property CalculateFee_AlwaysMatchesSimpleReferenceImplementation() =>
         Prop.ForAll(GenValidOrder(), order =>
             _sut.CalculateFee(order) == SimpleCalculateFee(order));
