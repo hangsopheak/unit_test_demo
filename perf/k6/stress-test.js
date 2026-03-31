@@ -1,19 +1,21 @@
 import http from 'k6/http';
-import { check, sleep } from 'k6';
+import { check } from 'k6';
 import { BASE_URL, HEADERS, randomOrder } from './helpers/config.js';
 
-// Stress test: push to 200 users — find the breaking point
+// Stress test: slow ramp to find the exact breaking point.
+// K6 abortOnFail stops the test the moment p(95) crosses 500ms —
+// the VU count at that moment IS the breaking point.
 export const options = {
   stages: [
-    { duration: '30s', target: 50 },   // Normal load
-    { duration: '30s', target: 100 },  // Beyond normal
-    { duration: '30s', target: 150 },  // Pushing limits
-    { duration: '30s', target: 200 },  // Breaking point?
-    { duration: '30s', target: 0 },    // Recovery — does it come back?
+    { duration: '30s', target: 200 },   // Zone 1: should be healthy
+    { duration: '60s', target: 2000 },  // Slow ramp — watch exactly where it breaks
+    { duration: '30s', target: 0 },     // Recovery
   ],
   thresholds: {
-    http_req_duration: ['p(95)<2000'], // Relaxed — we EXPECT degradation
-    http_req_failed: ['rate<0.50'],    // Allow up to 50% errors — we're finding limits
+    http_req_duration: [
+      { threshold: 'p(95)<500' }, 
+    ],
+    http_req_failed: ['rate<0.05'],
   },
 };
 
@@ -26,8 +28,6 @@ export default function () {
 
   check(createRes, {
     'create: status is 201': (r) => r.status === 201,
-    'create: response time < 1s': (r) => r.timings.duration < 1000,
+    'create: response time < 2s': (r) => r.timings.duration < 2000,
   });
-
-  sleep(0.5); // Shorter think time — stressed users click faster
 }

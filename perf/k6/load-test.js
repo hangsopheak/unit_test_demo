@@ -6,8 +6,8 @@ import { BASE_URL, HEADERS, randomOrder } from './helpers/config.js';
 export const options = {
   stages: [
     { duration: '30s', target: 20 },  // Ramp up to 20 users
-    { duration: '1m',  target: 50 },  // Ramp to peak: 50 users
-    { duration: '30s', target: 50 },  // Hold at peak
+    { duration: '1m',  target: 100 },  // Ramp to peak: 50 users
+    { duration: '30s', target: 100 },  // Hold at peak
     { duration: '30s', target: 0 },   // Ramp down (graceful)
   ],
   thresholds: {
