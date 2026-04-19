@@ -1,0 +1,602 @@
+{
+  "info": {
+    "_postman_id": "obs-demo-session-11",
+    "name": "FoodFast Observability Demo",
+    "description": "Session 11 — Observability & Monitoring\n\nRuns 17 requests across 4 phases to produce meaningful time-series data in Aspire Dashboard and Grafana Cloud.\n\n## How to run in Postman\n1. Open Collection Runner (▶ button)\n2. Select environment: FoodFast Local\n3. Set **Delay** to **3000 ms** between requests\n4. Click **Run FoodFast Observability Demo**\n\nFor a richer histogram (more data points), set **Iterations** to 2 or 3.\n\n## What to watch in Aspire Dashboard (http://localhost:18888)\n- **Structured Logs** — filter by Level to see Warning and Error events stand out\n- **Metrics** — watch foodfast.payment.duration_ms spike during Phase 2 and 3\n- **Traces** — compare the 5-span happy path waterfall vs the truncated error traces\n\n## Loyalty tiers in this collection\n- new_user_* → Bronze (0 prior orders in DB)\n- Alice, Bob, Charlie, Eve → Silver (5 seeded orders each)\n- Gold tier (10+ orders) appears on 2nd/3rd iteration run",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Phase 1 — Baseline",
+      "description": "Establish healthy baseline traffic. All requests succeed. Metrics climb steadily.",
+      "item": [
+        {
+          "name": "Health Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"API is healthy — status 200\", () => {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test(\"Returns array of orders\", () => {",
+                  "    pm.expect(pm.response.json()).to.be.an('array');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders"]
+            },
+            "description": "Verify the API is up before running scenarios."
+          }
+        },
+        {
+          "name": "Happy Path — new_user_1 Bronze (8.5km, no rush)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Order created — status 201\", () => {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test(\"Response has order ID\", () => {",
+                  "    pm.expect(pm.response.json().id).to.be.a('number');",
+                  "});",
+                  "pm.test(\"Delivery fee is $5.00 (medium distance, no rush)\", () => {",
+                  "    pm.expect(pm.response.json().deliveryFee).to.equal(5);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"new_user_1\",\n  \"cartSubtotal\": 45.00,\n  \"distanceInKm\": 8.5,\n  \"isRushHour\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders"]
+            },
+            "description": "Bronze tier (0 prior orders). Standard pricing. Expect 5 spans in trace: HTTP → CountAsync → ProcessPayment → CalculateFee → SaveChanges."
+          }
+        },
+        {
+          "name": "Happy Path — new_user_2 Bronze (4km, rush hour)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Order created — status 201\", () => {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test(\"Delivery fee is $3.00 (short distance × rush surcharge)\", () => {",
+                  "    pm.expect(pm.response.json().deliveryFee).to.equal(3);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"new_user_2\",\n  \"cartSubtotal\": 30.00,\n  \"distanceInKm\": 4.0,\n  \"isRushHour\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders"]
+            },
+            "description": "Bronze tier. Rush hour surcharge applies ($2.00 × 1.5 = $3.00). Cart $30 < $50, no free delivery."
+          }
+        },
+        {
+          "name": "Happy Path — Alice Silver (6km, no rush, free delivery)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Order created — status 201\", () => {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test(\"Delivery is free (cart >= $50)\", () => {",
+                  "    pm.expect(pm.response.json().deliveryFee).to.equal(0);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"Alice\",\n  \"cartSubtotal\": 55.00,\n  \"distanceInKm\": 6.0,\n  \"isRushHour\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders"]
+            },
+            "description": "Alice has 5 seeded orders → Silver tier. Cart $55 >= $50 → free delivery. Check CalculateFee span tags: customer.loyalty_tier=Silver."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Phase 2 — First Incident",
+      "description": "400 validation error, then a slow payment gateway spike. Watch payment.duration_ms histogram diverge.",
+      "item": [
+        {
+          "name": "400 — Validation Error (empty name, bad subtotal)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Validation rejected — status 400\", () => {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "pm.test(\"Response contains errors array\", () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.errors).to.be.an('array').with.length.above(0);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"\",\n  \"cartSubtotal\": -1,\n  \"distanceInKm\": 0,\n  \"isRushHour\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders"]
+            },
+            "description": "Triggers: Warning log, HTTP 400 span only (no DB or payment spans). In Aspire: filter Structured Logs by Level=Warning to see the validation event."
+          }
+        },
+        {
+          "name": "Happy Path — new_user_3 Bronze (7km, no rush)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Order created — status 201\", () => {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test(\"Delivery fee is $5.00\", () => {",
+                  "    pm.expect(pm.response.json().deliveryFee).to.equal(5);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"new_user_3\",\n  \"cartSubtotal\": 40.00,\n  \"distanceInKm\": 7.0,\n  \"isRushHour\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders"]
+            },
+            "description": "Recovery after 400. Traffic resumes normally."
+          }
+        },
+        {
+          "name": "Happy Path — new_user_4 Bronze (3km, no rush)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Order created — status 201\", () => {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test(\"Delivery fee is $2.00 (short distance)\", () => {",
+                  "    pm.expect(pm.response.json().deliveryFee).to.equal(2);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"new_user_4\",\n  \"cartSubtotal\": 25.00,\n  \"distanceInKm\": 3.0,\n  \"isRushHour\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders"]
+            },
+            "description": "Recovery continues. payment.duration_ms stays at baseline ~40ms."
+          }
+        },
+        {
+          "name": "SLOW GATEWAY — new_user_5 (28km, no rush) ⚠️",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Order created despite slow gateway — status 201\", () => {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test(\"Response time exceeds 2 seconds (slow payment gateway)\", () => {",
+                  "    pm.expect(pm.response.responseTime).to.be.above(2000);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"new_user_5\",\n  \"cartSubtotal\": 49.00,\n  \"distanceInKm\": 28.0,\n  \"isRushHour\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders"]
+            },
+            "description": "SLOW SCENARIO: distanceInKm=28 > 25 triggers 2s payment delay. In Aspire Traces: ProcessPayment span = ~2040ms. In Metrics: payment.duration_ms histogram shows first spike — p95 starts separating from p50."
+          }
+        },
+        {
+          "name": "Happy Path — Bob Silver (5km, rush, free delivery)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Order created — status 201\", () => {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test(\"Free delivery applies (cart >= $50)\", () => {",
+                  "    pm.expect(pm.response.json().deliveryFee).to.equal(0);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"Bob\",\n  \"cartSubtotal\": 55.00,\n  \"distanceInKm\": 5.0,\n  \"isRushHour\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders"]
+            },
+            "description": "Bob is Silver (5 seeded orders). Rush hour applies but cart >= $50 overrides to free. Traffic recovers after slow gateway incident."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Phase 3 — Second Incident",
+      "description": "Payment gateway error (500), followed by another slow request. Watch payment.failures counter and the bimodal distribution build on the histogram.",
+      "item": [
+        {
+          "name": "500 — Payment Error (fail_charlie) ❌",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Payment error returns 500\", () => {",
+                  "    pm.response.to.have.status(500);",
+                  "});",
+                  "pm.test(\"Response contains error detail\", () => {",
+                  "    pm.expect(pm.response.json().detail).to.include('Payment gateway rejected');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"fail_charlie\",\n  \"cartSubtotal\": 60.00,\n  \"distanceInKm\": 8.5,\n  \"isRushHour\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders"]
+            },
+            "description": "ERROR SCENARIO: customerName starts with 'fail_' → payment gateway throws. In Aspire Traces: ProcessPayment span shows red error badge, no CalculateFee or SaveChanges spans. In Structured Logs: Level=Error with full exception. payment.failures counter +1."
+          }
+        },
+        {
+          "name": "Happy Path — new_user_1 Bronze (9km, no rush)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Order created — status 201\", () => {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test(\"Delivery fee is $5.00\", () => {",
+                  "    pm.expect(pm.response.json().deliveryFee).to.equal(5);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"new_user_1\",\n  \"cartSubtotal\": 40.00,\n  \"distanceInKm\": 9.0,\n  \"isRushHour\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders"]
+            },
+            "description": "Recovery after 500. new_user_1 now has 1 prior order — still Bronze."
+          }
+        },
+        {
+          "name": "Happy Path — Charlie Silver (12km, rush hour)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Order created — status 201\", () => {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test(\"Fee is $15.00 (long distance + rush surcharge)\", () => {",
+                  "    pm.expect(pm.response.json().deliveryFee).to.equal(15);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"Charlie\",\n  \"cartSubtotal\": 45.00,\n  \"distanceInKm\": 12.0,\n  \"isRushHour\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders"]
+            },
+            "description": "Charlie is Silver (5 seeded orders). Rush surcharge applies: $10 × 1.5 = $15. Silver does NOT waive rush hour — only Gold does."
+          }
+        },
+        {
+          "name": "SLOW GATEWAY — new_user_5 (29km, rush hour) ⚠️",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Order created despite slow gateway — status 201\", () => {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test(\"Response time exceeds 2 seconds\", () => {",
+                  "    pm.expect(pm.response.responseTime).to.be.above(2000);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"new_user_5\",\n  \"cartSubtotal\": 35.00,\n  \"distanceInKm\": 29.0,\n  \"isRushHour\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders"]
+            },
+            "description": "SLOW SCENARIO (second hit): distanceInKm=29 > 25. Now two slow requests in the histogram — p95 clearly separates from p50 in Aspire/Grafana metrics view."
+          }
+        },
+        {
+          "name": "500 — Payment Error (fail_dave) ❌",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Payment error returns 500\", () => {",
+                  "    pm.response.to.have.status(500);",
+                  "});",
+                  "pm.test(\"Response contains error detail\", () => {",
+                  "    pm.expect(pm.response.json().detail).to.include('Payment gateway rejected');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"fail_dave\",\n  \"cartSubtotal\": 70.00,\n  \"distanceInKm\": 6.0,\n  \"isRushHour\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders"]
+            },
+            "description": "Second ERROR scenario. payment.failures counter now = 2. In Grafana: the counter chart shows a clear recurring pattern — this is what triggers an alert."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Phase 4 — Recovery",
+      "description": "All happy path. Metrics return to baseline. orders.created counter keeps climbing. payment.duration_ms p50 stable.",
+      "item": [
+        {
+          "name": "Happy Path — new_user_2 Bronze (5km, no rush, free delivery)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Order created — status 201\", () => {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test(\"Free delivery (cart = $50)\", () => {",
+                  "    pm.expect(pm.response.json().deliveryFee).to.equal(0);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"new_user_2\",\n  \"cartSubtotal\": 50.00,\n  \"distanceInKm\": 5.0,\n  \"isRushHour\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders"]
+            },
+            "description": "Recovery. new_user_2 now has 1 prior order — still Bronze. Cart exactly $50 → free delivery."
+          }
+        },
+        {
+          "name": "Happy Path — Eve Silver (7km, no rush)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Order created — status 201\", () => {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test(\"Delivery fee is $5.00\", () => {",
+                  "    pm.expect(pm.response.json().deliveryFee).to.equal(5);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"Eve\",\n  \"cartSubtotal\": 45.00,\n  \"distanceInKm\": 7.0,\n  \"isRushHour\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders"]
+            },
+            "description": "Eve is Silver (5 seeded orders). Normal recovery traffic."
+          }
+        },
+        {
+          "name": "Happy Path — new_user_3 Bronze (10km, rush, free delivery)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Order created — status 201\", () => {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test(\"Free delivery (cart > $50)\", () => {",
+                  "    pm.expect(pm.response.json().deliveryFee).to.equal(0);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"new_user_3\",\n  \"cartSubtotal\": 65.00,\n  \"distanceInKm\": 10.0,\n  \"isRushHour\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders"]
+            },
+            "description": "Final recovery request. Cart $65 >= $50 → free delivery despite rush hour. System stable — all metrics back to baseline."
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000",
+      "type": "default"
+    }
+  ]
+}
