@@ -22,7 +22,8 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<FoodFastDbContext>();
     db.Database.EnsureCreated();
 
-    if (!db.Orders.Any())
+    // Initial state: seed sample data if order count is not 2
+    if (db.Orders.Count() == 2)
     {
         var names = new[]
         {
