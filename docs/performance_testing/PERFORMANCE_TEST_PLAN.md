@@ -1,84 +1,71 @@
-# Performance Testing Plan — FoodFast API with K6
+# FoodFast API — Performance Testing with K6
 
-## Overview
+## Step-by-Step Setup Guide
 
-This document defines the performance testing strategy for the FoodFast API using K6. It maps each lecture concept to a concrete K6 script, details the script architecture, and specifies every test type with its configuration, purpose, and expected behavior.
+### Step 1 — Install K6
 
-## How to Use This Document
+**macOS:**
+```bash
+brew install k6
+```
 
-1. **Read the concept mapping** to understand which slide topic each K6 script demonstrates
-2. **Study the helper module** to understand shared configuration and data generation
-3. **Review each test type** — they are ordered from lightest (smoke) to heaviest (soak)
-4. **Cross-reference with the Business Specification** for expected metrics and thresholds
+**Windows:**
+```bash
+choco install k6
+```
 
----
+**Linux (Debian/Ubuntu):**
+```bash
+sudo gpg -k
+sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg \
+  --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491466396D8
+echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+sudo apt-get update
+sudo apt-get install k6
+```
 
-## Part 1: Concept Mapping to Lecture Slides
+**Verify installation:**
+```bash
+k6 version
+```
 
-### The Physics of Traffic
+### Step 2 — Start the API
 
-| Concept | K6 Script | How It Demonstrates |
-|---|---|---|
-| Zone 1: Healthy | `smoke-test.js` | 1 VU — stable latency, 0% errors, predictable throughput |
-| Zone 2: Saturation | `load-test.js` | 50 VUs — latency climbing, throughput plateaus, queuing begins |
-| Zone 3: Collapse | `stress-test.js` | 200 VUs — errors spike, throughput drops, system unresponsive |
-| The "Knee" of the curve | `stress-test.js` at ~100 VUs | Transition point visible in web dashboard as latency curve bends upward |
+K6 sends real HTTP requests to a running server. Start the FoodFast API first:
 
-### Testing Methodologies
+```bash
+cd src/FoodFast.Api
+dotnet run
+```
 
-| Concept | K6 Script | Configuration |
-|---|---|---|
-| Load Testing ("Will it work?") | `load-test.js` | `stages` ramp to 50 VUs — expected peak traffic |
-| Stress Testing ("When will it break?") | `stress-test.js` | `stages` ramp to 200 VUs — beyond expected limits |
-| Spike Testing (Flash Sale) | `spike-test.js` | 10 → 300 VUs in 10 seconds — sudden burst |
-| Soak Testing (Endurance) | `soak-test.js` | 30 VUs for 10 minutes — find slow degradation |
+The API runs on `http://localhost:5000` and seeds 100 orders on startup.
 
-### The USE Method
+**Verify it's running** — open a new terminal and test:
+```bash
+curl http://localhost:5000/api/orders
+```
 
-| USE Dimension | K6 Metric | What to Watch |
-|---|---|---|
-| Utilization | System CPU during test | CPU spikes during stress/spike tests |
-| Saturation | `http_req_waiting` (time spent queued) | Grows as SQLite lock contention increases |
-| Errors | `http_req_failed` rate | Jumps from 0% → 20%+ at saturation point |
+You should see a JSON array of orders.
 
-### K6 Core Concepts
+### Step 3 — Create the Project Structure
 
-| Concept | Where It Appears | Purpose |
-|---|---|---|
-| **Checks** | Every script — `check(res, {...})` | Per-request assertions (like `Assert.Equal` in xUnit) |
-| **Thresholds** | Every script — `options.thresholds` | Whole-test pass/fail criteria (SLO enforcement) |
-| **Stages** | Load, stress, spike, soak scripts | Define the VU ramp-up/ramp-down traffic shape |
-| **Groups** | `full-workflow.js` — `group('name', fn)` | Organize metrics by workflow step |
-| **Think time** | Every script — `sleep(n)` | Simulate realistic user pauses between actions |
+From the **repository root**, create the K6 folder structure:
 
----
+```bash
+mkdir -p perf/k6/helpers
+```
 
-## Part 2: Project Structure
-
+This gives you:
 ```
 perf/
   k6/
-    helpers/
-      config.js           — shared base URL, headers, random order generator
-    smoke-test.js         — 1 VU, 30s — sanity check
-    load-test.js          — ramp to 50 VUs — expected peak traffic
-    stress-test.js        — ramp to 200 VUs — find breaking point
-    spike-test.js         — 0 → 300 VUs — sudden traffic burst
-    soak-test.js          — 30 VUs, 10 min — endurance / degradation
-    full-workflow.js      — Create → Get → Calculate → Delete lifecycle
+    helpers/      ← shared config goes here
+                  ← test scripts go here
 ```
 
-### Why this structure?
+### Step 4 — Create the Helper Module
 
-- **One file per test type** — each script answers a different performance question
-- **Shared helper** — `config.js` centralizes the base URL, headers, and data generator so scripts stay DRY
-- **Separate from `tests/`** — performance tests are not unit/integration tests; they live in their own `perf/` folder
-
----
-
-## Part 3: Helper Module
-
-**File:** `perf/k6/helpers/config.js`
+Create `perf/k6/helpers/config.js` — this is shared by all test scripts:
 
 ```javascript
 export const BASE_URL = 'http://localhost:5000';
@@ -99,310 +86,263 @@ export function randomOrder() {
 }
 ```
 
-**Key design decisions:**
+**What this does:**
+- `BASE_URL` — single place to change if the API port changes
+- `HEADERS` — JSON content type for POST requests
+- `randomOrder()` — generates a different order payload each call (varied names, prices, distances, rush hour)
 
-- `randomOrder()` generates a different payload each call — avoids cache effects and exercises the full input space
-- `NAMES` array with 8 entries provides realistic variety without being excessive
-- Cart subtotal range ($5–$85) spans below and above the $50 free delivery threshold
-- Distance range (1–31 km) spans all three pricing tiers (< 5, 5–10, >= 10 km)
-- ~33% rush hour probability exercises both pricing paths
+### Step 5 — Create Your First Script (Smoke Test)
 
----
+Create `perf/k6/smoke-test.js`:
 
-## Part 4: Test Scripts — Detailed
+```javascript
+import http from 'k6/http';
+import { check, sleep } from 'k6';
+import { BASE_URL, HEADERS, randomOrder } from './helpers/config.js';
 
-### Script 1: Smoke Test
+export const options = {
+  vus: 1,
+  duration: '30s',
+  thresholds: {
+    http_req_duration: ['p(95)<500'],
+    http_req_failed: ['rate<0.01'],
+  },
+};
 
-**File:** `perf/k6/smoke-test.js`
+export default function () {
+  const res = http.post(`${BASE_URL}/api/orders`, randomOrder(), { headers: HEADERS });
 
-**Question answered:** "Does the API even work?"
+  check(res, {
+    'status is 201': (r) => r.status === 201,
+    'has id': (r) => r.json('id') !== undefined,
+  });
 
-| Setting | Value | Rationale |
-|---|---|---|
-| VUs | 1 | Single user — no contention |
-| Duration | 30s | Enough iterations for a meaningful sample |
-| p95 threshold | < 500ms | Generous — should be well under this |
-| Error threshold | < 1% | Zero errors expected |
+  sleep(1);
+}
+```
 
-**K6 building blocks introduced:**
+**Key concepts in this script:**
 
 | Concept | Code | Purpose |
 |---|---|---|
-| `options` | `{ vus: 1, duration: '30s', thresholds: {...} }` | Define load shape and pass/fail criteria |
-| `check()` | `check(res, { 'status is 201': ... })` | Assert each response (logged, doesn't fail test) |
-| `thresholds` | `{ http_req_duration: ['p(95)<500'] }` | Fail the test if latency exceeds SLO |
-| `sleep()` | `sleep(1)` | Simulate user think time between actions |
+| `options` | `vus: 1, duration: '30s'` | 1 virtual user for 30 seconds |
+| `thresholds` | `p(95)<500` | Fail the test if 95th percentile latency exceeds 500ms |
+| `check()` | `'status is 201': ...` | Assert each response (logged, doesn't stop test) |
+| `sleep(1)` | Think time | Simulates a real user pausing between actions |
 
-**What to observe:** All metrics should be excellent. This establishes the baseline for comparison with heavier tests.
+### Step 6 — Run Your First Test
 
----
+From the **repository root**:
 
-### Script 2: Load Test
-
-**File:** `perf/k6/load-test.js`
-
-**Question answered:** "Will it handle expected peak traffic?"
-
-| Stage | Duration | Target VUs | Simulates |
-|---|---|---|---|
-| Ramp up | 30s | 20 | Morning traffic building |
-| Ramp to peak | 1m | 50 | Lunch hour peak |
-| Hold at peak | 30s | 50 | Sustained peak load |
-| Ramp down | 30s | 0 | Evening wind-down |
-
-**Endpoints exercised:** POST `/api/orders` (create) + GET `/api/orders` (list)
-
-**What to observe:**
-- Latency increases as VUs ramp up — this is the approach to Zone 2
-- Throughput (req/s) may plateau even as VUs increase — system is at capacity
-- The web dashboard shows the "knee" of the Performance Curve
-- The list endpoint (`GET /api/orders`) gets slightly slower as more orders accumulate
-
----
-
-### Script 3: Stress Test
-
-**File:** `perf/k6/stress-test.js`
-
-**Question answered:** "When will it break?"
-
-| Stage | Duration | Target VUs | Zone |
-|---|---|---|---|
-| Normal load | 30s | 50 | Zone 1: Healthy |
-| Beyond normal | 30s | 100 | Zone 1 → Zone 2 transition |
-| Pushing limits | 30s | 150 | Zone 2: Saturation |
-| Breaking point | 30s | 200 | Zone 3: Collapse |
-| Recovery | 30s | 0 | Does it come back? |
-
-**Thresholds are intentionally relaxed** — the goal is to observe failure, not prevent it.
-
-**What to observe:**
-- SQLite lock contention becomes visible at ~100 VUs (error rate starts climbing)
-- At 200 VUs, the `http_req_failed` rate may exceed 30%
-- The recovery stage shows whether the system returns to normal after load drops
-- p95 latency may exceed 1–2 seconds at peak stress
-
-**SQLite-specific failure mode:** SQLite throws "database is locked" errors when too many concurrent writers compete for the file lock. This is not a bug — it's a design limitation that makes the performance curve visible at modest load levels.
-
----
-
-### Script 4: Spike Test
-
-**File:** `perf/k6/spike-test.js`
-
-**Question answered:** "Can it handle a sudden burst?"
-
-| Stage | Duration | Target VUs | What Happens |
-|---|---|---|---|
-| Normal traffic | 10s | 10 | Baseline |
-| SPIKE | 10s | 300 | Instant burst — the "flash sale" |
-| Sustained spike | 30s | 300 | Maintained pressure |
-| Spike ends | 10s | 10 | Traffic drops |
-| Recovery | 30s | 10 | Does the system recover? |
-
-**What to observe:**
-- The transition from 10 → 300 VUs is nearly instant — the system has no time to adapt
-- Error rate and latency spike simultaneously
-- The **recovery period** is the most important observation: how long until metrics return to pre-spike levels?
-- If recovery is slow, it indicates queued requests are still being processed (the "Thundering Herd" aftermath)
-
----
-
-### Script 5: Soak Test
-
-**File:** `perf/k6/soak-test.js`
-
-**Question answered:** "Does it degrade over time?"
-
-| Stage | Duration | Target VUs | Purpose |
-|---|---|---|---|
-| Ramp up | 1m | 30 | Gentle start |
-| Sustained | 8m | 30 | Look for degradation |
-| Ramp down | 1m | 0 | Clean shutdown |
-
-**Why this test is different:** The load is *moderate and constant*. The stress test pushes hard for 2 minutes; the soak test pushes gently for 10 minutes. Different failures surface:
-
-| Failure Type | Stress Test Finds It? | Soak Test Finds It? |
-|---|---|---|
-| Lock contention | Yes | Sometimes |
-| Memory leaks | No | Yes |
-| Connection pool exhaustion | No | Yes |
-| Growing response payloads | No | Yes |
-| Disk space exhaustion | No | Yes |
-
-**Built-in degradation trigger:** The script hits both `POST /api/orders` (creates data) and `GET /api/orders` (returns ALL data). As the test runs, the GET response grows — no pagination means every order ever created is returned. This simulates real-world data growth.
-
-> **Note:** 10 minutes is a shortened duration for classroom demo. Production soak tests run 1–4 hours to surface slow leaks.
-
----
-
-### Script 6: Full Workflow
-
-**File:** `perf/k6/full-workflow.js`
-
-**Question answered:** "Which step in the user journey is the bottleneck?"
-
-| Step | Endpoint | Method | Expected Relative Speed |
-|---|---|---|---|
-| Create Order | `/api/orders` | POST | Slowest (write lock) |
-| Get Order | `/api/orders/{id}` | GET | Fastest (single read) |
-| Calculate Fee | `/api/orders/{id}/calculate-fee` | POST | Medium (read + CPU) |
-| Delete Order | `/api/orders/{id}` | DELETE | Slow (write lock) |
-
-**K6 `group()` feature:** Each step is wrapped in a `group()` call, which separates metrics by step in the K6 output. This lets you see exactly which endpoint is the bottleneck.
-
-**Self-cleaning:** The workflow deletes each order at the end, preventing data accumulation. This is the opposite of the soak test, where accumulation is intentional.
-
----
-
-## Part 5: Reading K6 Output
-
-### Terminal Summary
-
-Every K6 run prints a summary table. Here's how to read the key lines:
-
+```bash
+k6 run perf/k6/smoke-test.js
 ```
-     checks.........................: 97.50%  ✓ 1950     ✗ 50
-     http_req_duration..............: avg=45ms   min=3ms   med=28ms   max=1.2s   p(90)=95ms   p(95)=180ms
+
+**Expected output:**
+```
+     checks.........................: 100.00% ✓ 30   ✗ 0
+     http_req_duration..............: avg=8ms   p(95)=15ms
    ✓ { p(95)<500 }
-     http_req_failed................: 2.50%   ✓ 50       ✗ 1950
-   ✓ { rate<0.05 }
-     http_reqs......................: 2000    66.7/s
-     iterations.....................: 1000    33.3/s
+     http_req_failed................: 0.00%    ✓ 0    ✗ 30
+   ✓ { rate<0.01 }
+     http_reqs......................: 30      1.0/s
+     iterations.....................: 30      1.0/s
 ```
 
-| Line | Read as |
-|---|---|
-| `checks: 97.50%` | 97.5% of individual response assertions passed |
-| `http_req_duration avg=45ms` | Average response time was 45ms |
-| `p(90)=95ms p(95)=180ms` | 90% of requests under 95ms, 95% under 180ms |
-| `✓ { p(95)<500 }` | Threshold PASSED — p95 is under 500ms |
-| `http_req_failed: 2.50%` | 2.5% of requests returned errors |
-| `✓ { rate<0.05 }` | Threshold PASSED — error rate under 5% |
-| `http_reqs: 2000 66.7/s` | 2000 total requests at 66.7 per second throughput |
-| `iterations: 1000 33.3/s` | 1000 complete test cycles (each cycle may make multiple requests) |
+If you see `✓` next to thresholds — the test passed. Your setup is correct.
 
-### Percentiles Explained
+### Step 7 — Add More Test Scripts
 
-| Percentile | Meaning | Who experiences it |
+Follow the same pattern to create the remaining scripts (see Test Scripts section below for configurations):
+
+| Script | Create this file | Copy config from |
 |---|---|---|
-| p(50) / median | Half of requests are faster than this | The "typical" user |
-| p(90) | 90% of requests are faster than this | Most users |
-| p(95) | 95% are faster — this is the standard SLO metric | The industry standard |
-| p(99) | Only 1% are slower — the "tail latency" | Your angriest user |
+| Load | `perf/k6/load-test.js` | Load Test section |
+| Stress | `perf/k6/stress-test.js` | Stress Test section |
+| Spike | `perf/k6/spike-test.js` | Spike Test section |
+| Soak | `perf/k6/soak-test.js` | Soak Test section |
+| Full Workflow | `perf/k6/full-workflow.js` | Full Workflow section |
 
-> **Rule of thumb:** Average hides outliers. p95 is the standard for SLOs because it captures the experience of the vast majority while allowing for natural variation.
+### Step 8 — Run with Real-Time Dashboard (Optional)
 
-### K6 Web Dashboard
-
-Run any script with `K6_WEB_DASHBOARD=true` to get real-time charts:
+K6 has a built-in web dashboard for live charts during the test:
 
 ```bash
 K6_WEB_DASHBOARD=true k6 run perf/k6/stress-test.js
-# Open http://localhost:5665 in browser
+# Open http://localhost:5665 in your browser
 ```
 
-The dashboard shows:
-- **VUs over time** — matches the `stages` configuration
-- **Request rate** — throughput in real-time
-- **Response time** — latency percentiles as a time series (watch the curve form!)
-- **Errors** — error rate over time
-- **Checks** — pass/fail rate live
+### Resetting Between Tests
 
----
-
-## Part 6: Checks vs Thresholds
-
-These two K6 features serve different purposes. Understanding the distinction is essential.
-
-### Checks — Per-Request Assertions
-
-```javascript
-check(res, {
-  'status is 201': (r) => r.status === 201,
-  'has id': (r) => r.json('id') !== undefined,
-});
-```
-
-- Evaluated on **every response**
-- Failures are **logged** but do not fail the test
-- Think of them as `Assert.Equal()` — they verify correctness
-- Useful for: "Did this specific request return the right status code?"
-
-### Thresholds — Whole-Test Pass/Fail
-
-```javascript
-export const options = {
-  thresholds: {
-    http_req_duration: ['p(95)<500'],
-    http_req_failed: ['rate<0.05'],
-  },
-};
-```
-
-- Evaluated **after the test completes** against aggregated metrics
-- Failures cause K6 to exit with code 1 (test **fails**)
-- Think of them as a CI gate — they determine if the build is green or red
-- Useful for: "Did the overall performance meet our SLO?"
-
-### Summary
-
-| | Checks | Thresholds |
-|---|---|---|
-| Scope | Single request | Entire test run |
-| On failure | Logged, test continues | Test exits with code 1 |
-| Analogy | `Assert.Equal()` | CI pass/fail gate |
-| Question | "Was this response correct?" | "Did the system meet its SLO?" |
-
----
-
-## Part 7: Test Execution
-
-### Prerequisites
-
-```bash
-# Install K6
-brew install k6          # macOS
-choco install k6         # Windows
-# See full installation guide in the demo plan
-
-# Start the API
-cd src/FoodFast.Api
-dotnet run
-# API runs on http://localhost:5000 with 100 seeded orders
-```
-
-### Run individual scripts
-
-```bash
-k6 run perf/k6/smoke-test.js        # 30 seconds
-k6 run perf/k6/load-test.js         # ~2.5 minutes
-k6 run perf/k6/stress-test.js       # ~2.5 minutes
-k6 run perf/k6/spike-test.js        # ~1.5 minutes
-k6 run perf/k6/full-workflow.js      # ~2 minutes
-k6 run perf/k6/soak-test.js         # ~10 minutes
-```
-
-### Run with Web Dashboard
-
-```bash
-K6_WEB_DASHBOARD=true k6 run perf/k6/stress-test.js
-# Open http://localhost:5665 for real-time charts
-```
-
-### Reset database between tests
+Each test creates orders in the database. To start fresh:
 
 ```bash
 rm src/FoodFast.Api/foodfast.db
 cd src/FoodFast.Api && dotnet run
-# Fresh database with 100 seeded orders
 ```
 
-### Recommended test order
+---
 
-1. **Smoke** — verify the API works before applying load
-2. **Load** — check performance under expected peak
-3. **Stress** — find the breaking point
-4. **Spike** — test sudden burst resilience
-5. **Full Workflow** — identify per-endpoint bottlenecks
-6. **Soak** — check for degradation over time (run last, takes longest)
+## System Under Test
+
+**5 endpoints** on a SQLite-backed API (port 5000, 100 seeded orders on startup). SQLite uses file-level locking — only one writer at a time — making performance zones visible at modest load.
+
+| Method | Endpoint | Write/Read | Concern |
+|---|---|---|---|
+| POST | `/api/orders` | Write | Lock contention under concurrent writes |
+| GET | `/api/orders` | Read | Response grows as orders accumulate (no pagination) |
+| GET | `/api/orders/{id}` | Read | Fast, but affected by DB lock waits |
+| DELETE | `/api/orders/{id}` | Write | Same lock contention as POST |
+| POST | `/api/orders/{id}/calculate-fee` | Read | CPU-bound: runs `DeliveryPricingEngine` |
+
+## Project Structure
+
+```
+perf/k6/
+  helpers/config.js       — shared BASE_URL, HEADERS, randomOrder()
+  smoke-test.js           — 1 VU, 30s — sanity check
+  load-test.js            — ramp to 100 VUs — expected peak traffic
+  stress-test.js          — ramp to 2000 VUs — find breaking point
+  spike-test.js           — 10 → 300 VUs in 10s — sudden burst
+  soak-test.js            — 30 VUs, 10 min — endurance / degradation
+  full-workflow.js        — Create → Get → Calculate Fee → Delete lifecycle
+```
+
+## Helper Module (`helpers/config.js`)
+
+- `BASE_URL`: `http://localhost:5000`
+- `HEADERS`: `Content-Type: application/json`
+- `randomOrder()`: Generates varied payloads (8 names, $5–$85 cart, 1–31 km, ~33% rush hour)
+
+## Test Scripts — Quick Reference
+
+### Smoke Test — "Does it even work?"
+
+| Setting | Value |
+|---|---|
+| VUs | 1 |
+| Duration | 30s |
+| Thresholds | p95 < 500ms, error rate < 1% |
+| Endpoints | POST `/api/orders` |
+| Think time | 1s |
+
+Baseline sanity check. All metrics should be excellent.
+
+### Load Test — "Will it handle expected peak?"
+
+| Stage | Duration | Target VUs |
+|---|---|---|
+| Ramp up | 30s | 20 |
+| Ramp to peak | 1m | 100 |
+| Hold at peak | 30s | 100 |
+| Ramp down | 30s | 0 |
+
+- **Thresholds:** p95 < 500ms, error rate < 5%
+- **Endpoints:** POST + GET `/api/orders`
+- **Think time:** 1s
+- **What to observe:** Latency climbs with VUs; throughput may plateau at capacity.
+
+### Stress Test — "When will it break?"
+
+| Stage | Duration | Target VUs |
+|---|---|---|
+| Zone 1 healthy | 30s | 200 |
+| Slow ramp to collapse | 60s | 2000 |
+| Recovery | 30s | 0 |
+
+- **Thresholds:** p95 < 500ms, error rate < 5%
+- **Endpoints:** POST `/api/orders`
+- **Think time:** none (no sleep)
+- **What to observe:** SQLite lock contention causes errors to spike at high VU counts. The slow ramp makes the exact breaking point visible.
+
+### Spike Test — "Flash sale at 12:00 PM"
+
+| Stage | Duration | Target VUs |
+|---|---|---|
+| Normal traffic | 10s | 10 |
+| SPIKE | 10s | 300 |
+| Sustained spike | 30s | 300 |
+| Spike ends | 10s | 10 |
+| Recovery | 30s | 10 |
+
+- **Thresholds:** p95 < 3000ms (relaxed)
+- **Endpoints:** POST `/api/orders`
+- **Think time:** 0.3s (minimal — everyone clicking at once)
+- **Key observation:** How quickly does the system **recover** after the spike ends?
+
+### Soak Test — "Does it degrade over time?"
+
+| Stage | Duration | Target VUs |
+|---|---|---|
+| Ramp up | 1m | 30 |
+| Sustained | 8m | 30 |
+| Ramp down | 1m | 0 |
+
+- **Thresholds:** p95 < 500ms, error rate < 5%
+- **Endpoints:** POST + GET `/api/orders`
+- **Think time:** 1s
+- **Degradation trigger:** GET `/api/orders` returns ALL orders — response grows as test creates more. This surfaces slow degradation (memory leaks, growing payloads).
+
+> Production soak tests run 1–4 hours; 10 minutes is shortened for demo.
+
+### Full Workflow — "Which step is the bottleneck?"
+
+| Stage | Duration | Target VUs |
+|---|---|---|
+| Ramp up | 30s | 20 |
+| Hold | 1m | 20 |
+| Ramp down | 30s | 0 |
+
+- **Thresholds:** p95 < 800ms, error rate < 5%
+- **Workflow per iteration:** Create → Get → Calculate Fee → Delete (uses `group()` for per-step metrics)
+- **Self-cleaning:** Deletes each order at end — no data accumulation
+
+Expected relative speed: GET (fastest) > Calculate Fee (CPU) > POST/DELETE (write lock contention)
+
+## Performance Curve — Expected Zones
+
+| Zone | VUs | Latency | Errors | State |
+|---|---|---|---|---|
+| 1: Healthy | 1–50 | ~5–50ms | 0% | Spare capacity |
+| 2: Saturation | 50–200 | 50–500ms | 0–5% | Latency climbing, throughput plateaus |
+| 3: Collapse | 200+ | 500ms–2s+ | 20–50%+ | Lock contention dominates |
+
+## Checks vs Thresholds
+
+| | Checks | Thresholds |
+|---|---|---|
+| Scope | Per-request | Whole test |
+| On failure | Logged, test continues | Test exits with code 1 |
+| Analogy | `Assert.Equal()` | CI pass/fail gate |
+
+## Key K6 Metrics
+
+| Metric | K6 Name | Measures |
+|---|---|---|
+| Latency | `http_req_duration` (avg, p95) | Response time |
+| Throughput | `http_reqs` rate | Requests per second |
+| Error rate | `http_req_failed` rate | Failed request percentage |
+| Check rate | `checks` rate | Assertion pass percentage |
+
+## Execution
+
+```bash
+# Prerequisites
+brew install k6                          # macOS
+cd src/FoodFast.Api && dotnet run        # Start API on :5000
+
+# Run tests (in recommended order)
+k6 run perf/k6/smoke-test.js             # 30s
+k6 run perf/k6/load-test.js              # ~2.5 min
+k6 run perf/k6/stress-test.js            # ~2 min
+k6 run perf/k6/spike-test.js             # ~1.5 min
+k6 run perf/k6/full-workflow.js          # ~2 min
+k6 run perf/k6/soak-test.js              # ~10 min
+
+# With real-time dashboard
+K6_WEB_DASHBOARD=true k6 run perf/k6/stress-test.js
+# Open http://localhost:5665
+
+# Reset database between tests
+rm src/FoodFast.Api/foodfast.db
+```
