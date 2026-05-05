@@ -131,19 +131,6 @@ builder.Services.AddOpenTelemetry()
         .AddOtlpExporter(ConfigureOtlp));
 ```
 
-Required usings:
-
-```csharp
-using System.Diagnostics;
-using System.Diagnostics.Metrics;
-using OpenTelemetry.Exporter;
-using OpenTelemetry.Metrics;
-using OpenTelemetry.Resources;
-using OpenTelemetry.Trace;
-using Serilog;
-using Serilog.Formatting.Json;
-```
-
 ### Step 4: Declare Custom Telemetry Primitives
 
 Declare as local variables before the endpoint definitions (captured as closures by handlers):
@@ -171,14 +158,13 @@ var deliveryFeeHist = meter.CreateHistogram<double>("foodfast.delivery_fee",
 
 ```
 1. Input validation            → 400 + Warning log (if invalid)
-2. EF Core: CountAsync         → auto span (loyalty tier lookup — order history count)
-3. Loyalty tier resolution     → Bronze / Silver / Gold; Gold clears effectiveRushHour
-4. ProcessPayment (custom)     → custom span + paymentDuration.Record()
+2. EF Core: CountAsync         → auto span (order history lookup)
+3. ProcessPayment (custom)     → custom span + paymentDuration.Record()
    └─ distanceInKm > 25        → 2s delay + payment.routing tag      [demo: slow gateway]
    └─ customerName "fail_*"    → exception + SetStatus(Error) + paymentFailures.Add() [demo: 500]
-5. CalculateFee (custom)       → custom span: distance + effectiveRushHour + loyaltyTier tags
-6. EF Core: SaveChangesAsync   → auto span (insert order)
-7. Post-save                   → Information log + ordersCreated.Add() + deliveryFeeHist.Record()
+4. CalculateFee (custom)       → custom span with distance + fee tags
+5. EF Core: SaveChangesAsync   → auto span (insert order)
+6. Post-save                   → Information log + ordersCreated.Add() + deliveryFeeHist.Record()
 ```
 
 ### Key code: ProcessPayment span
@@ -236,12 +222,7 @@ feeSpan?.SetTag("order.fee", fee); // tag after calculation — records the actu
 ### Start the Local Stack
 
 ```bash
-# Aspire Dashboard
-# Port mapping:
-#   18888:18888 — Dashboard UI (browser)
-#   4317:18889  — OTLP gRPC ingestion (host 4317 → container 18889)
-#                 The container listens on 18889 internally, NOT 4317.
-#                 Our app sends to localhost:4317 which Docker forwards to 18889 inside the container.
+# Aspire Dashboard — UI on 18888, OTLP ingest on 4317 (forwarded to container 18889)
 docker run --rm -d \
   -p 18888:18888 -p 4317:18889 \
   -e DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS=true \

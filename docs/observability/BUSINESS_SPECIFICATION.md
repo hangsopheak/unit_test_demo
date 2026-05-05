@@ -55,22 +55,6 @@ All spans belong to a single trace rooted at the incoming HTTP request.
 
 ---
 
-## Business Rules
-
-### Loyalty Tier
-
-The customer's total order history determines their tier, which affects delivery fee calculation.
-
-| Tier | Condition | Benefit |
-|---|---|---|
-| Bronze | Fewer than 5 past orders | Standard pricing |
-| Silver | 5–9 past orders | Standard pricing |
-| Gold | 10 or more past orders | Rush-hour surcharge waived |
-
-The tier is resolved by querying the customer's order count at the time of placement. This drives the `CalculateFee` span — the `customer.loyalty_tier` tag shows which tier was applied and whether `is_rush_hour` was overridden.
-
----
-
 ## Instrumentation Rules
 
 ### Log Events
@@ -89,13 +73,6 @@ The tier is resolved by querying the customer's order count at the time of place
 | Payment completes (success or fail) | `foodfast.payment.duration_ms` | Record elapsed ms |
 | Payment exception | `foodfast.payment.failures` | +1, tagged `reason=gateway_rejection` |
 | Order created (201) | `foodfast.delivery_fee` | Record fee value in USD |
-
-### Span Lifecycle Rules
-
-| Condition | Span | Behaviour |
-|---|---|---|
-| Exception in payment | Parent HTTP span | Inherits error status from child span |
-| Validation or duplicate fail | No DB or custom spans | Trace stops at HTTP span (no unnecessary work performed) |
 
 ---
 
@@ -128,8 +105,7 @@ The tier is resolved by querying the customer's order count at the time of place
 | HTTP status | 201 Created |
 | Log | `Information`: order created, `LoyaltyTier=Bronze`, `DeliveryFee=5.00` |
 | Metrics | `orders.created` +1, `payment.duration_ms` ~40ms, `delivery_fee` $5.00 |
-| Trace spans | HTTP → CountAsync (loyalty lookup) → ProcessPayment → CalculateFee → SaveChangesAsync |
-| Note | `CalculateFee` span shows `customer.loyalty_tier=Bronze`, `order.is_rush_hour=false` |
+| Trace spans | HTTP → CountAsync → ProcessPayment → CalculateFee → SaveChangesAsync |
 
 ### Scenario 3 — Slow Payment Gateway
 
